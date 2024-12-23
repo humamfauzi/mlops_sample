@@ -1,0 +1,6 @@
+FROM quay.io/jupyter/datascience-notebook
+
+RUN pip install mlflow
+RUN pip install psycopg2-binary
+
+CMD ["tail", "-f", "/dev/null"]

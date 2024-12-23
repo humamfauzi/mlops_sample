@@ -8,17 +8,6 @@ class DataCleaner:
     def get_df(self):
         # use copy so any alteration by getter does not affect the self.df
         return copy(self.df)
-
-    def scenario1(self):
-        return self.alter_column()
-            .remove_columns(
-                CommodityFlow.ORIGIN_CFS_AREA,
-                CommodityFlow.DESTINATION_CFS_AREA,
-                CommodityFlow.NAICS,
-                CommodityFlow.QUARTER,
-                CommodityFlow.MODE
-                    )
-            .remove_null()
             
     # every cleaner should call alter_column to transfer column name
     def alter_column(self):
@@ -36,9 +25,11 @@ class DataCleaner:
         return self
 
     # remove all rows that contain null
-    def remove_null(self):
-        pass
+    def remove_null(self, columns):
+        self.df = self.df.dropna(subset=columns)
+        return self
 
+    # remove all outlier value
     def remove_nonsense_value(self):
         pass
 

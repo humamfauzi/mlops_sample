@@ -1,5 +1,37 @@
 from enum import Enum
+from abc import ABC, abstractmethod
 
+# a join between primary id, target, categorical, and numerical should always be
+# a full column
+class ColumnInterface(ABC):
+    # a dataframe should always have primary identifier
+    # that unique in all rows
+    @classmethod
+    @abstractmethod
+    def primary_id(cls):
+        pass
+
+    # a training dataset should also have a target
+    @classmethod
+    @abstractmethod
+    def target(cls):
+        pass
+
+    # all tabular dataset either a categorical or numerical
+    # this methods will call all categorical column
+    @classmethod
+    @abstractmethod
+    def categories(cls):
+        pass
+
+    # all tabular dataset either a categorical or numerical
+    # this methods will call all numerical column
+    @classmethod
+    @abstractmethod
+    def numericals(cls):
+        pass
+
+# NOTE: the number in enumerate should correspond to column number it will later replaced
 class CommodityFlow(Enum):
     SHIPMENT_ID = 1
 
@@ -34,5 +66,49 @@ class CommodityFlow(Enum):
     EXPORT_COUNTRY = 18
     HAZMAT = 19
     WEIGHT_FACTOR = 20
-    
+
+    @classmethod
+    def primary_id(cls):
+        return cls.SHIPMENT_ID
+
+    @classmethod
+    def target(cls):
+        return cls.SHIPMENT_VALUE
+
+    @classmethod
+    def categorical(cls):
+        return [
+            cls.ORIGIN_STATE,
+            cls.ORIGIN_DISTRICT,
+            cls.ORIGIN_CFS_AREA,
+
+            cls.DESTINATION_STATE,
+            cls.DESTINATION_DISTRICT, 
+            cls.DESTINATION_CFS_AREA,
+
+            cls.NAICS,
+            cls.QUARTER,
+            cls.SCTG,
+            cls.MODE,
+
+            cls.EXPORT_COUNTRY,
+            cls.HAZMAT,
+        ]
+
+    @classmethod
+    def numerical(cls):
+        return [
+            cls.SHIPMENT_WEIGHT, 
+            cls.SHIPMENT_DISTANCE_CIRCLE,
+            cls.SHIPMENT_DISTANCE_ROUTE,
+            cls.WEIGHT_FACTOR,
+        ]
+
+
+    @classmethod
+    def train(cls, current_column):
+        all = cls.numerical() + cls.categorical()
+        return list(set(all) & set(current_column))
+
+
 
