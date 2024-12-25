@@ -30,6 +30,10 @@ services:
       - '5000'
       - --backend-store-uri
       - 'postgresql://mlflow_user:mlflow_password@database:5432/db'
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      interval: 30s
+      retries: 3
     depends_on:
       database:
         condition: service_healthy
@@ -44,6 +48,25 @@ services:
         condition: service_healthy
     networks:
       - internal
+  server:
+    # require MLFlow because it need to load the artifacts and models
+    # this is just need the client side not the server side
+    image: humamf/dsmlflow 
+    ports:
+      - "5050:5050"
+    # command: for debugging 
+    command:
+      - "tail"
+      - "-f"
+      - "/dev/null"
+      # command:
+      # - python
+      # - server/server.py
+    networks:
+      - internal
+    volumes:
+      - ${HOST_VOLUME_PATH}:/home/jovyan/work
+
 volumes:
   train:
 

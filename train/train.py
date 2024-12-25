@@ -1,6 +1,8 @@
 import pandas as pd
+import pickle
 import numpy as np
 import mlflow
+import os
 
 from copy import copy
 from sklearn.model_selection import train_test_split
@@ -21,7 +23,13 @@ class ScenarioManager:
         self.datacleaner = None
         self.datatransform = None
         self.train = None
+        self.run_name = None
+        self.is_using_tracker = False
         return
+
+    def set_run_name(self, name):
+        self.run_name = name
+        return self
 
     def set_dataloader(self, dataloader):
         self.dataloader = dataloader
@@ -33,11 +41,30 @@ class ScenarioManager:
 
     def set_datatransform(self, datatransform):
         self.datatransform = datatransform
+        self.datatransform.set_run_name(self.run_name)
         return self
 
     def set_train(self, train):
         self.train = train
+        self.train.set_run_name(self.run_name)
+        self.train.set_tracker(self.is_using_tracker)
         return self
+
+    def set_tracking(self, path, name):
+        self.tracking_path = path
+        self.experiment_name = name
+        mlflow.set_tracking_uri(uri=self.tracking_path)
+        mlflow.set_experiment(self.experiment_name)
+        return self
+
+    def start_run(self, run_name):
+        mlflow.start_run(run_name=run_name)
+        self.is_using_tracker = True
+        return self
+
+    def end_run(self):
+        run = mlflow.active_run()
+        mlflow.end_run()
 
     def default_path(self):
         df = self.dataloader.load_data()
@@ -116,6 +143,8 @@ class DataTransform:
         self.ohe = {}
         self.mm = {}
 
+        self.run_name = None
+
         self.train_pair = None
         self.valid_pair = None
         self.test_pair = None
@@ -128,9 +157,13 @@ class DataTransform:
             .minmax()
             .reapply()
             .shape_check()
+            .save_transformation()
          )
 
         return self.get_pairs()
+    def set_run_name(self, name):
+        self.run_name = name
+        return self
     
     def get_pairs(self):
         return Pairs(self.train_pair, self.valid_pair, self.test_pair)
@@ -152,6 +185,22 @@ class DataTransform:
         }
         print(pd.DataFrame(ddict))
         return self
+
+    def save_transformation(self):
+        dir = "artifacts/preprocess"
+        for key, value in self.ohe.items():
+            self.save_preprocessing_as_object(dir, "ohe", key, value)
+        for key, value in self.mm.items():
+            self.save_preprocessing_as_object(dir, "mm", key, value)
+        mlflow.log_artifacts(dir, artifact_path="preprocess")
+        return self
+
+    def save_preprocessing_as_object(self, dir, prefix, key, obj):
+        os.makedirs(f'{dir}/{key}', exist_ok=True)
+        path = f'{dir}/{key}/{prefix}.pkl'
+        with open(path, 'wb') as f:
+            pickle.dump(obj, f)
+        return path
 
     def shape_check(self):
         train_column_num = self.train_pair.X.shape[1]
@@ -251,9 +300,12 @@ class Train:
         self.tracker_path = None
         self.experiment_name = None
 
-    def set_tracker_path(self, tracker_path):
-        self.is_using_tracker = True
-        self.tracker_path = tracker_path
+    def set_run_name(self, name):
+        self.run_name = name
+        return self
+
+    def set_tracker(self, is_using_tracker):
+        self.is_using_tracker = is_using_tracker
         return self
 
     def set_train_name(self, name):
@@ -269,25 +321,21 @@ class Train:
         return self
 
     def train_data_with_tracker(self):
-        mlflow.set_tracking_uri(uri=self.tracker_path)
-        mlflow.set_experiment(self.experiment_name)
-
         params, lr = self.basic_linear_regression()
         train_mse, valid_mse = self.train_validate(params, lr)
 
-        with mlflow.start_run():
-            mlflow.log_params(params)
-            mlflow.log_metric("train_mse", train_mse)
-            mlflow.log_metric("valid_mse", valid_mse)
-            mlflow.log_metric("total_trained", self.train_pair.X.shape[0])
-            mlflow.log_metric("total_features", self.train_pair.X.shape[1])
-            model_info = mlflow.sklearn.log_model(
-                sk_model=lr,
-                artifact_path="cfs_model",
-                signature=infer_signature(self.train_pair.x_array(), lr.predict(self.train_pair.x_array())),
-                input_example=self.train_pair.x_array(),
-                registered_model_name="hello",
-            )
+        mlflow.log_params(params)
+        mlflow.log_metric("train_mse", train_mse)
+        mlflow.log_metric("valid_mse", valid_mse)
+        mlflow.log_metric("total_trained", self.train_pair.X.shape[0])
+        mlflow.log_metric("total_features", self.train_pair.X.shape[1])
+        model_info = mlflow.sklearn.log_model(
+            sk_model=lr,
+            artifact_path="cfs_model",
+            signature=infer_signature(self.train_pair.x_array(), lr.predict(self.train_pair.x_array())),
+            input_example=self.train_pair.x_array()[:5],
+            registered_model_name="hello",
+        )
         return self
 
     def train_validate(self, param, learn):
@@ -301,22 +349,23 @@ class Train:
     def basic_linear_regression(self):
         return {}, LinearRegression()
 
-        
-
-
 DATASET_PATH = "dataset/cfs_2017.csv"
 TRACKER_PATH = "http://mlflow:5000" # see dock r compose for details
+RUN_NAME = "base_run"
 if __name__ == "__main__":
     dataloader = DataLoader(DATASET_PATH)
     datacleaner = DataCleaner()
     datatransform = DataTransform()
     train = (Train()
-        .set_tracker_path(TRACKER_PATH)
         .set_train_name("humamtest"))
     (ScenarioManager()
+        .set_run_name(RUN_NAME)
+        .set_tracking(TRACKER_PATH, "humamtest")
+        .start_run("long_run")
         .set_dataloader(dataloader)
         .set_datacleaner(datacleaner)
         .set_datatransform(datatransform)
         .set_train(train)
         .default_path()
+        .end_run()
      )

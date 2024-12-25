@@ -6,6 +6,11 @@ __pycache__/
 # C extensions
 *.so
 
+# mlruns
+mlruns/
+artifacts/
+server/artifacts/
+
 # database volume
 pgdata/
 
