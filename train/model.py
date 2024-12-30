@@ -5,19 +5,23 @@ import mlflow
 import os
 
 from copy import copy
-from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import OneHotEncoder, MinMaxScaler
+from abc import ABC, abstractmethod
 from sklearn.linear_model import LinearRegression
 from sklearn.metrics import mean_squared_error
 from mlflow.models import infer_signature
 
 from train.column import CommodityFlow
-from train.sstruct import Stage, TrainTestPair, Pairs
-from train.scenario_manager import ScenarioManager
-import train.data_loader as data_loader
-import train.data_cleaner as data_cleaner
+from train.sstruct import Pairs
+
+class TabularModel(ABC):
+    @abstractmethod
+    def train_data(self, Pairs):
+        pass
         
-class Train:
+# TODO find out whether separating each model to its own class is a good idead
+# the premise is that we only load the kind of model we want to train to
+# parent class which is this
+class Model(TabularModel):
     def __init__(self):
         self.train_pair = None
         self.valid_pair = None
@@ -39,6 +43,8 @@ class Train:
         self.experiment_name = name
         return self
 
+    # the objective with train data is that
+    # it would send metrics to mlflow and save artifacts there
     def train_data(self, pairs):
         self.train_pair = pairs.get_train_pair()
         self.valid_pair = pairs.get_valid_pair()
@@ -47,6 +53,11 @@ class Train:
             return self.train_data_with_tracker()
         return self
 
+    # TODO handle multiple model and hyper parameter gridsearch
+    # TODO auto tagging the best model
+    # TODO use the basic training as base metrics so we can compare it in dashboard
+    # TODO the features seems not saved. Need to find out how to save feature columns
+    # TODO testing this function requires mock all mlflow methods
     def train_data_with_tracker(self):
         params, lr = self.basic_linear_regression()
         train_mse, valid_mse = self.train_validate(params, lr)
@@ -65,6 +76,7 @@ class Train:
         )
         return self
 
+    # TODO generalize it so it can handle train, valid, and test well
     def train_validate(self, param, learn):
         learn.fit(self.train_pair.x_array(), self.train_pair.y)
 
@@ -77,28 +89,3 @@ class Train:
 
     def basic_linear_regression(self):
         return {}, LinearRegression()
-
-DATASET_PATH = "dataset/cfs_2017.csv"
-TRACKER_PATH = "http://mlflow:5000" # see docker compose for details
-RUN_NAME = "base_run"
-
-def train():
-    dataloader = data_loader.Disk(DATASET_PATH, CommodityFlow)
-    datacleaner = data_cleaner.DataFrame()
-    datatransform = DataTransform(CommodityFlow)
-    train = (Train()
-        .set_train_name("humamtest"))
-    (ScenarioManager()
-        .set_run_name(RUN_NAME)
-        .set_tracking(TRACKER_PATH, "humamtest")
-        .start_run("long_run")
-        .set_dataloader(dataloader)
-        .set_datacleaner(datacleaner)
-        .set_datatransform(datatransform)
-        .set_train(train)
-        .default_path()
-        .end_run()
-     )
-
-if __name__ == "__main__":
-    train()

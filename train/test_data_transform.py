@@ -89,6 +89,11 @@ class TestDataTransform:
         assert dt.train_pair.X.loc[9][SampleEnum.COLUMN_NUMERICAL] == 1
 
     def test_transformation_object(self, df):
+        """
+        this should prove that transformation saved as pickle object able
+        to be loaded and tranform incoming data. This is important for
+        inference.
+        """
         dt = DataTransform(SampleEnum)
         dt.train_pair = FeatureTargetPair(
             df[SampleEnum.feature(df.columns)], 
@@ -100,7 +105,7 @@ class TestDataTransform:
         obj = dt.ohe[SampleEnum.COLUMN_CATEGORICAL]
         # stored in artifacts because it already incuded in .gitignore
         dt.save_preprocessing_as_object("artifacts", "ohe", SampleEnum.COLUMN_CATEGORICAL, obj)
-        with open(f"sample/{SampleEnum.COLUMN_CATEGORICAL}/ohe.pkl", 'rb') as file:
+        with open(f"artifacts/{SampleEnum.COLUMN_CATEGORICAL}/ohe.pkl", 'rb') as file:
             ohe_func = pickle.load(file)
             result = ohe_func.transform(np.array(['a']).reshape(1, -1))
 
@@ -111,5 +116,16 @@ class TestDataTransform:
             # the second one is represent 'b' categories so it should equal to 0
             assert result[0][1] == 0
 
-    def test_reapply(self):
-        pass
+    def test_reapply(self, df):
+        dt = DataTransform(SampleEnum)
+        dt.transformed_data = df
+        dt.split_stage()
+        assert dt.train_pair.X.shape == (8, 2)
+        assert dt.valid_pair.X.shape == (1, 2)
+        assert dt.test_pair.X.shape == (1, 2)
+
+        dt.one_hot_encoding().reapply()
+
+        assert dt.train_pair.X.shape == (8, 3)
+        assert dt.valid_pair.X.shape == (1, 3)
+        assert dt.test_pair.X.shape == (1, 3)

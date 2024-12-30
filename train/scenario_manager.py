@@ -8,7 +8,7 @@ class ScenarioManager:
         self.dataloader = None
         self.datacleaner = None
         self.datatransform = None
-        self.train = None
+        self.model = None
         self.run_name = None
         self.is_using_tracker = False
         return
@@ -31,9 +31,9 @@ class ScenarioManager:
         return self
 
     def set_train(self, train):
-        self.train = train
-        self.train.set_run_name(self.run_name)
-        self.train.set_tracker(self.is_using_tracker)
+        self.model = train
+        self.model.set_run_name(self.run_name)
+        self.model.set_tracker(self.is_using_tracker)
         return self
 
     def set_tracking(self, path, name):
@@ -56,5 +56,5 @@ class ScenarioManager:
         df = self.dataloader.load_data()
         df_cleaned = self.datacleaner.clean_data(df)
         pairs = self.datatransform.transform_data(df_cleaned)
-        self.train.train_data(pairs)
+        self.model.train_data(pairs)
         return self

@@ -2,6 +2,7 @@ import pandas as pd
 import numpy as np
 import os 
 import pickle
+import mlflow
 
 from abc import ABC, abstractmethod
 from sklearn.preprocessing import OneHotEncoder, MinMaxScaler
@@ -216,8 +217,11 @@ class DataTransform(TabularDataTransform):
 
     def reapply(self):
         for pair in [self.valid_pair, self.test_pair]:
-            for cat in self._catcol(pair):
+            # we need to validate that the column exist in the dataframe
+            # and the column is being transformed
+            # putting column that not transformed would raise KeyError
+            for cat in list(set(self._catcol(pair)) & set(self.ohe.keys())):
                 self._transform_ohe(pair, cat)
-            for num in self._numcol(pair):
+            for num in list(set(self._numcol(pair)) & set(self.mm.keys())):
                 self._transform_mm(pair, num)
         return self
