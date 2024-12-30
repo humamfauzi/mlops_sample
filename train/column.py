@@ -3,7 +3,7 @@ from abc import ABC, abstractmethod
 
 # a join between primary id, target, categorical, and numerical should always be
 # a full column
-class ColumnInterface(ABC):
+class TabularColumn(ABC):
     # a dataframe should always have primary identifier
     # that unique in all rows
     @classmethod
@@ -21,14 +21,23 @@ class ColumnInterface(ABC):
     # this methods will call all categorical column
     @classmethod
     @abstractmethod
-    def categories(cls):
+    def categorical(cls):
         pass
 
     # all tabular dataset either a categorical or numerical
     # this methods will call all numerical column
     @classmethod
     @abstractmethod
-    def numericals(cls):
+    def numerical(cls):
+        pass
+
+    # The reason why you need current column input because
+    # there is high chance that you dont use all column because one or other thing
+    # there fore we need to know the current input and find intersect
+    # between it and all possible feature
+    @classmethod
+    @abstractmethod
+    def feature(cls, current_column: []):
         pass
 
 # NOTE: the number in enumerate should correspond to column number it will later replaced
@@ -104,9 +113,10 @@ class CommodityFlow(Enum):
             cls.WEIGHT_FACTOR,
         ]
 
-
     @classmethod
-    def train(cls, current_column):
+    def feature(cls, current_column):
+        """
+        """
         all = cls.numerical() + cls.categorical()
         return list(set(all) & set(current_column))
 

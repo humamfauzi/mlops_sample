@@ -113,6 +113,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
     def handle_encoder(self, encoder, value):
         return encoder.transform(np.array(value).reshape(1, -1).astype(np.int64))
 
+# MLFlow class handling loading artifacts for server.
 class MlFlowManagement:
     def __init__(self, tracking_url, name):
         self.tracking_url = tracking_url

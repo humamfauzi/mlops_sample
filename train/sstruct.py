@@ -1,13 +1,21 @@
 from enum import Enum
 import numpy as np
+import pandas as pd
+from typing import Union
 
 class Stage(Enum):
     TRAIN = 1
     VALID = 2
     TEST = 3
 
-class TrainTestPair:
-    def __init__(self, X, y, stage):
+ArrayLike = Union[np.ndarray, pd.DataFrame]
+class FeatureTargetPair:
+    def __init__(
+        self, 
+        X: ArrayLike, 
+        y: ArrayLike, 
+        stage: Stage
+    ) -> None:
         self.X = X
         self.y = y
         self.stage = stage

@@ -39,7 +39,7 @@ services:
         condition: service_healthy
     networks:
       - internal
-  datascience:
+  train:
     image: humamf/dsmlflow
     volumes:
       - ${HOST_VOLUME_PATH}:/home/jovyan/work
