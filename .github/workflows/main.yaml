@@ -7,6 +7,9 @@ jobs:
     container:
       image: humamf/dsmlflow:stable
     steps:
+      - name: Set permissions
+        run: | 
+          sudo chmod -R 777 $GITHUB_WORKSPACE
       - uses: actions/checkout@v2
       - name: Test all
         working-directory: work
