@@ -17,5 +17,4 @@ jobs:
           sudo chmod -R 777 $GITHUB_WORKSPACE
       - uses: actions/checkout@v2
       - name: Test all
-        working-directory: work
         run: make test
