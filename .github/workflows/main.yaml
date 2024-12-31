@@ -5,7 +5,12 @@ jobs:
   build:
     runs-on: ubuntu-latest
     container:
+      # pulling container seems take time and eating resources
+      # manually adding packages is a good option with
+      # compromise in replicability
+      # for now we use docker container but we open to other solutions
       image: humamf/dsmlflow:stable
+      options: --user root
     steps:
       - name: Set permissions
         run: | 
