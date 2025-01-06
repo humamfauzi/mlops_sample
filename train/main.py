@@ -1,5 +1,6 @@
 from train.scenario_manager import ScenarioManager
 from train.column import CommodityFlow
+import os
 
 import train.data_loader as data_loader
 import train.data_cleaner as data_cleaner

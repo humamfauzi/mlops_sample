@@ -17,9 +17,9 @@ RUN pip install mlflow
 
 # do not expose any port, let the docker declaration decide
 
-# COPY the entire directly; only copy server file since the
+# COPY the entire directly
 # we only want to serve the endpoint not training models
-COPY /server ./
+COPY . ./
 
 CMD ["python", "-m", "server.server"]
 

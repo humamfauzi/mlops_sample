@@ -38,7 +38,7 @@ server-terminal:
 	docker exec -ti mlops_sample-server-1 /bin/bash
 
 create-server-container:
-	docker build -t humamf/mlops-server -f Dockerfile.server
+	docker buildx build --platform linux/amd64 -t humamf/mlops-server -f Dockerfile.server .
 
 # run test units
 test:
@@ -55,6 +55,10 @@ setup-ec2:
 	sudo service docker start
 	sudo usermod -aG docker ec2-user
 	docker --version
+	sudo curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+	sudo chmod +x /usr/local/bin/docker-compose
+	docker-compose --version
+
 
 # generate tags for python for better symbol searching
 tags:
