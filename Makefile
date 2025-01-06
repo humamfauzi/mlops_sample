@@ -48,6 +48,14 @@ test:
 train:
 	python -m train.train
 
+# setup essential tools for EC2
+setup-ec2:
+	sudo yum update -y
+	sudo amazon-linux-extras install docker -y
+	sudo service docker start
+	sudo usermod -aG docker ec2-user
+	docker --version
+
 # generate tags for python for better symbol searching
 tags:
 	ctags -R --languages=Python \
