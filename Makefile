@@ -38,8 +38,7 @@ server-terminal:
 	docker exec -ti mlops_sample-server-1 /bin/bash
 
 create-server-container:
-	docker buildx build --platform linux/amd64 -t humamf/mlops-server:amd64 -f Dockerfile.server .
-	docker push humamf/mlops-server:amd64
+	docker buildx build --platform linux/amd64 -t humamf/mlops-server:amd64 -f Dockerfile.server --push .
 
 # run test units
 test:
