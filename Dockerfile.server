@@ -1,0 +1,25 @@
+FROM python:3.9-slim
+
+WORKDIR /app
+
+# import sklearn so we can use pickle load object and work as expected
+RUN pip install scikit-learn
+
+# the model input is in numpy form, so we need numpy
+RUN pip install numpy
+
+# the input would transformed to panadas dataframe
+# we design out 
+RUN pip install pandas
+
+# import mlflow to retrieve object model and preprocessing
+RUN pip install mlflow
+
+# do not expose any port, let the docker declaration decide
+
+# COPY the entire directly; only copy server file since the
+# we only want to serve the endpoint not training models
+COPY /server ./
+
+CMD ["python", "-m", "server.server"]
+

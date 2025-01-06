@@ -43,6 +43,8 @@ services:
     image: humamf/dsmlflow
     volumes:
       - ${HOST_VOLUME_PATH}:/home/jovyan/work
+    environment:
+      - TRACKER_PATH=${TRACKER_PATH}
     depends_on:
       database:
         condition: service_healthy
@@ -51,21 +53,17 @@ services:
   server:
     # require MLFlow because it need to load the artifacts and models
     # this is just need the client side not the server side
-    image: humamf/dsmlflow 
+    # there is no longer need sharing volume since everything it need already exist
+    # inside
+    image: humamf/mlops-server 
+    environment:
+      - TRACKER_PATH=${TRACKER_PATH}
+      - PORT=${PORT}
     ports:
-      - "5050:5050"
+      - "${PORT}:${PORT}"
     # command: for debugging 
-    command:
-      - "tail"
-      - "-f"
-      - "/dev/null"
-      # command:
-      # - python
-      # - server/server.py
     networks:
       - internal
-    volumes:
-      - ${HOST_VOLUME_PATH}:/home/jovyan/work
 
 volumes:
   train:

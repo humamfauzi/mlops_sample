@@ -1,0 +1,42 @@
+version: '3.8'
+services:
+  database:
+    image: postgres
+    volumes: 
+      - "./pgdata:/var/lib/postgresql/data"
+    environment:
+      POSTGRES_USER: mlflow_user
+      POSTGRES_PASSWORD: mlflow_password
+      POSTGRES_DB: db
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - internal
+  mlflow:
+    image: humamf/py-mlflow
+    ports:
+      - "${MLFLOW_PORT}:${MLFLOW_PORT}"
+    command:
+      - mlflow
+      - server
+      - --host
+      - 0.0.0.0
+      - --port
+      - ${MLFLOW_PORT}
+      - --backend-store-uri
+      - 'postgresql://mlflow_user:mlflow_password@database:5432/db'
+    depends_on:
+      database:
+        condition: service_healthy
+    networks:
+      - internal
+
+volumes:
+  train:
+
+networks:
+  internal:
+    driver: bridge

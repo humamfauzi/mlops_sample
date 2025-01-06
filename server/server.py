@@ -11,7 +11,9 @@ from urllib.parse import urlparse, parse_qs
 from train.column import CommodityFlow
 import json
 
-PORT = 5050
+SERVER_PORT = os.getenv("SERVER_PORT")
+TRACKER_PATH = os.getenv("TRACKER_PATH") 
+
 # TODO rather than become constant, it should be injected/input to handler class for
 # more granular control
 ARTIFACT_DIR="server"
@@ -121,8 +123,8 @@ class MlFlowManagement:
         self.client = None
 
     def begin(self):
-        mlflow.set_tracking_uri(uri="http://mlflow:5000")
-        mlflow.set_experiment("humamtest")
+        mlflow.set_tracking_uri(uri=self.tracking_url)
+        mlflow.set_experiment(self.experiment)
         return self
 
     def set_client(self):
@@ -164,7 +166,6 @@ class MlFlowManagement:
         mlflow.artifacts.download_artifacts(artifact_uri=uri, dst_path=f"{self.artifact_destination}/artifacts")
         return self
 
-TRACKER_PATH = "http://mlflow:5000" # see docker compose for details
 with socketserver.TCPServer(("", PORT), Handler) as httpd:
     # The strategy here is that we want to load all required pkl and other artifact once
     # so that the http handler can just read the disk for inference

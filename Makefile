@@ -37,6 +37,9 @@ train-terminal:
 server-terminal:
 	docker exec -ti mlops_sample-server-1 /bin/bash
 
+create-server-container:
+	docker build -t humamf/mlops-server -f Dockerfile.server
+
 # run test units
 test:
 	pytest --ignore=pgdata -vv

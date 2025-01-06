@@ -7,7 +7,7 @@ import train.data_transform as data_transform
 import train.model as model
 
 DATASET_PATH = "dataset/cfs_2017.csv"
-TRACKER_PATH = "http://mlflow:5000" # see docker compose for details
+TRACKER_PATH = os.getenv("TRACKER_PATH")
 RUN_NAME = "base_run"
 
 def train():
