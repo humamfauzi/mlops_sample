@@ -1,0 +1,11 @@
+FROM python:3.9-slim
+
+WORKDIR /app
+
+COPY /loadtest .
+RUN apt update
+RUN apt install -y build-essential python3-dev libffi-dev libssl-dev
+RUN pip install --upgrade pip
+RUN pip install locust
+
+CMD ["locust", "-f", "locust.py", "--host=${HOST}"]

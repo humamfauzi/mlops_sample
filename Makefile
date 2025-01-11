@@ -59,6 +59,8 @@ setup-ec2:
 	sudo chmod +x /usr/local/bin/docker-compose
 	docker-compose --version
 
+manual-hit:
+	curl "http://localhost:5001/cfs2017?naics=1&origin_state=1&destination_state=2&mode=1&shipment_weight=200&shipment_distance_route=12"
 
 # generate tags for python for better symbol searching
 tags:
