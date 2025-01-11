@@ -1,5 +1,8 @@
 name: Load Test
 
+on:
+  workflow_dispatch:  # Manual trigger
+
 jobs:
   locust_test:
     runs-on: ubuntu-latest
