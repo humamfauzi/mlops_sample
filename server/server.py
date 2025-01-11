@@ -14,9 +14,32 @@ import json
 PORT = os.getenv("PORT")
 TRACKER_PATH = os.getenv("TRACKER_PATH") 
 
+
+# TODO use FastAPI or Flask for better routing
 # TODO rather than become constant, it should be injected/input to handler class for
 # more granular control
 ARTIFACT_DIR="server"
+
+class Error:
+    def __init__(self, code):
+        self.code = code
+        self.description = None
+        self.http_code = None
+
+    def set_description(self, desc):
+        self.description = desc
+        return self
+
+    def set_http_code(self, http_code):
+        self.http_code = http_code
+        return self
+
+    def get_dict(self):
+        return {
+            "code": self.code,
+            "description": self.description,
+            "http_code": self.http_code,
+        }
 
 class Handler(http.server.SimpleHTTPRequestHandler):
     def do_GET(self):
@@ -35,7 +58,9 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         return
     
     def process_query(self, query_params):
-        self.precheck(query_params)
+        err = self.precheck(query_params)
+        if err is not None:
+            return err.get_dict()
         transformed = self.transform(query_params)
         cost = self.infer(transformed)
         return {
@@ -46,12 +71,17 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         }
 
     def respond_with_result(self, result):
+        # Determine HTTP code and response body
+        http_code = result.get("http_code", 500 if "error" in result else 200)
         response = json.dumps(result)
-        self.send_response(200)
+    
+        # Send HTTP response
+        self.send_response(http_code)
         self.send_header("Content-Type", "application/json")
         self.end_headers()
+    
+        # Write response body
         self.wfile.write(response.encode('utf-8'))
-        return
 
     def respond_with_check(self):
         self.send_response(200)
@@ -63,6 +93,8 @@ class Handler(http.server.SimpleHTTPRequestHandler):
     def respond_with_not_found(self):
         self.send_response(404)
 
+    # TODO prececk should be provided by training model
+    # since server did not know what to check; some model might have different input 
     def precheck(self, raw):
         important = [
             "origin_state",
@@ -72,10 +104,15 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             "shipment_weight",
             "shipment_distance_route",
         ]
+        not_exist_key = []
         for i in important:
             if i not in raw.keys():
-                raise ValueError(f"Require {i} but not provided")
-        return self
+                not_exist_key.append(i) 
+        if len(not_exist_key) > 0:
+            return (Error("not_complete")
+                    .set_description(f"lack of this following key: {not_exist_key}")
+                    .set_http_code(401))
+        return None
 
     def infer(self, input):
         directory_path = f"{ARTIFACT_DIR}/artifacts/cfs_model/model.pkl"
@@ -159,11 +196,12 @@ class MlFlowManagement:
             CommodityFlow.NAICS,
             CommodityFlow.SHIPMENT_WEIGHT
         ]
+
     def load_all_artifacts(self):
         run_id = self.find_desired_run_id()
         uri = f"mlflow-artifacts:/1/{run_id}/artifacts"
         all = mlflow.artifacts.list_artifacts(artifact_uri=uri)
-        mlflow.artifacts.download_artifacts(artifact_uri=uri, dst_path=f"{self.artifact_destination}/artifacts")
+        mlflow.artifacts.download_artifacts(artifact_uri=uri, dst_path=f"{self.artifact_destination}")
         return self
 
 with socketserver.TCPServer(("", int(PORT)), Handler) as httpd:
