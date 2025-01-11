@@ -14,4 +14,5 @@ class User(HttpUser):
                 "shipment_distance_route":12,
         }
         full = f"{base}?{urlencode(query_params)}"
-        self.client.get(full)
+        # max request just three second; consider it fail if above three second
+        self.client.get(full, timeout=3)
