@@ -15,11 +15,17 @@ RUN pip install pandas
 # import mlflow to retrieve object model and preprocessing
 RUN pip install mlflow
 
+# import fast api for better API services
+RUN pip install async_timeout
+RUN pip install asyncio
+RUN pip install "fastapi[standard]"
+
 # do not expose any port, let the docker declaration decide
 
 # COPY the entire directly
 # we only want to serve the endpoint not training models
 COPY . ./
 
-CMD ["python", "-m", "server.server"]
+WORKDIR ./server
 
+CMD ["tail", "-f", "/dev/null"]

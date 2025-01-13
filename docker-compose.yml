@@ -59,6 +59,8 @@ services:
     environment:
       - TRACKER_PATH=${TRACKER_PATH}
       - PORT=${PORT}
+    volumes:
+      - ${HOST_VOLUME_PATH}:/app
     ports:
       - "${PORT}:${PORT}"
     # command: for debugging 
