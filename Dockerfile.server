@@ -26,6 +26,4 @@ RUN pip install "fastapi[standard]"
 # we only want to serve the endpoint not training models
 COPY . ./
 
-WORKDIR ./server
-
 CMD ["tail", "-f", "/dev/null"]
