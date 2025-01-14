@@ -5,6 +5,7 @@ on:
     paths:
       - 'server/server.py'
       - 'Makefile'
+      - 'Dockerfile.server'
 
 jobs:
   build:

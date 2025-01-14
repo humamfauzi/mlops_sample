@@ -26,4 +26,7 @@ RUN pip install "fastapi[standard]"
 # we only want to serve the endpoint not training models
 COPY . ./
 
+# need to access all folder because column is in train folder
+# TODO make column its own folder
+
 CMD ["tail", "-f", "/dev/null"]
