@@ -18,14 +18,17 @@ class TabularDataLoader(ABC):
 # it should transform whatever data in disk to a pandas dataframe
 # because it has abc of TabularDataLoader
 class Disk(TabularDataLoader):
-    def __init__(self, path: str, enum: Enum, chunk=1000):
+    def __init__(self, path: str, enum: Enum, chunk=None):
         self.path = path
         self.raw_data = None
         self.chunk_size = chunk
         self.enum = enum
 
     def load_data(self):
-        self.raw_data = pd.read_csv(self.path, nrows=self.chunk_size)
+        kwargs = {}
+        if self.chunk_size is not None:
+            kwargs['nrows'] = self.chunk_size
+        self.raw_data = pd.read_csv(self.path, **kwargs)
         self.replace_columns()
         return copy(self.raw_data)
 

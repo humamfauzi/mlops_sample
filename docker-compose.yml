@@ -17,6 +17,8 @@ services:
       retries: 5
     networks:
       - internal
+    profiles:
+      - mlflow
   mlflow:
     image: humamf/py-mlflow
     ports:
@@ -39,15 +41,14 @@ services:
         condition: service_healthy
     networks:
       - internal
+    profiles:
+      - mlflow
   train:
     image: humamf/dsmlflow
     volumes:
       - ${HOST_VOLUME_PATH}:/home/jovyan/work
     environment:
       - TRACKER_PATH=${TRACKER_PATH}
-    depends_on:
-      database:
-        condition: service_healthy
     networks:
       - internal
   server:

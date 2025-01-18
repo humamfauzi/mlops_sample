@@ -30,9 +30,9 @@ class FeatureTargetPair:
 
 class Pairs:
     def __init__(self, train, valid, test):
-        self.train = train
-        self.valid = valid
-        self.test = test
+        self.train: FeatureTargetPair = train
+        self.valid: FeatureTargetPair = valid
+        self.test: FeatureTargetPair = test
 
     def get_train_pair(self):
         return self.train 

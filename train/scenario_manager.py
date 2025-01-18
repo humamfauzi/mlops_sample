@@ -1,19 +1,22 @@
 import mlflow
 from train.data_loader import TabularDataLoader
+from train.data_cleaner import TabularDataCleaner
+from train.data_transform import TabularDataTransform
+from train.model import TabularModel
+from typing import Optional
 # all run initiate here
 # all run component should be included here and called in
 # desired scenario
 class ScenarioManager:
     def __init__(self):
-        self.dataloader = None
-        self.datacleaner = None
-        self.datatransform = None
-        self.model = None
-        self.run_name = None
-        self.is_using_tracker = False
+        self.dataloader: Optional[TabularDataLoader] = None
+        self.datacleaner: Optional[TabularDataCleaner] = None
+        self.datatransform: Optional[TabularDataTransform] = None
+        self.model: Optional[TabularModel] = None
+        self.run_name: Optional[str] = None
         return
 
-    def set_run_name(self, name):
+    def set_run_name(self, name: str):
         self.run_name = name
         return self
 
@@ -21,16 +24,18 @@ class ScenarioManager:
         self.dataloader = dataloader
         return self
 
-    def set_datacleaner(self, datacleaner):
+    def set_datacleaner(self, datacleaner: TabularDataCleaner):
         self.datacleaner = datacleaner
         return self
 
-    def set_datatransform(self, datatransform):
+    def set_datatransform(self, datatransform: TabularDataTransform):
+        if self.run_name is None:
+            raise ValueError("run name is required for data transform tracking")
         self.datatransform = datatransform
         self.datatransform.set_run_name(self.run_name)
         return self
 
-    def set_train(self, train):
+    def set_train(self, train: TabularModel):
         self.model = train
         self.model.set_run_name(self.run_name)
         self.model.set_tracker(self.is_using_tracker)

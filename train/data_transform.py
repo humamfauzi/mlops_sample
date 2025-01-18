@@ -17,6 +17,10 @@ class TabularDataTransform(ABC):
     def transform_data(self, df: pd.DataFrame) -> Pairs:
         pass
 
+    @abstractmethod
+    def set_run_name(self, name: str):
+        pass
+
 class DataTransform(TabularDataTransform):
     def __init__(self, enum: TabularColumn):
         self.ohe = {}

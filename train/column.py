@@ -1,5 +1,6 @@
 from enum import Enum
 from abc import ABC, abstractmethod
+from typing import List
 
 # a join between primary id, target, categorical, and numerical should always be
 # a full column
@@ -37,7 +38,7 @@ class TabularColumn(ABC):
     # between it and all possible feature
     @classmethod
     @abstractmethod
-    def feature(cls, current_column: []):
+    def feature(cls, current_column: List[Enum]):
         pass
 
 # NOTE: the number in enumerate should correspond to column number it will later replaced
