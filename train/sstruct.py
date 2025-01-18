@@ -1,19 +1,17 @@
 from enum import Enum
 import numpy as np
 import pandas as pd
-from typing import Union
 
 class Stage(Enum):
     TRAIN = 1
     VALID = 2
     TEST = 3
 
-ArrayLike = Union[np.ndarray, pd.DataFrame]
 class FeatureTargetPair:
     def __init__(
         self, 
-        X: ArrayLike, 
-        y: ArrayLike, 
+        X: pd.DataFrame, 
+        y: pd.DataFrame, 
         stage: Stage
     ) -> None:
         self.X = X
@@ -25,7 +23,7 @@ class FeatureTargetPair:
         print("X", self.X.shape)
         print("y", self.y.shape)
 
-    def x_array(self):
+    def x_array(self) -> np.ndarray:
         return np.array(self.X)
 
 class Pairs:

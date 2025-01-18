@@ -5,7 +5,7 @@ from copy import copy
 
 class TabularDataCleaner(ABC):
     @abstractmethod
-    def clean_data(self) -> pd.DataFrame:
+    def clean_data(self, df: pd.DataFrame) -> pd.DataFrame:
         """
         Clean all data inside the data frame
         regardless the input, it should have output of dataframe
