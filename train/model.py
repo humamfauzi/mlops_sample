@@ -1,4 +1,3 @@
-import pandas as pd
 import mlflow
 import random
 
@@ -17,11 +16,11 @@ from train.sstruct import Pairs, FeatureTargetPair
 class TabularModel(ABC):
     @abstractmethod
     def train_data(self, pairs: Pairs):
-        pass
+        return self
     
     @abstractmethod
     def set_run_name(self, name: str):
-        pass
+        return self
         
 class ModelScenario(Enum):
     BASIC = 1

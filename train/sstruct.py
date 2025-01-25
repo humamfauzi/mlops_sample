@@ -7,6 +7,23 @@ class Stage(Enum):
     VALID = 2
     TEST = 3
 
+    @classmethod
+    def from_enum(cls, name: str):
+        return {
+                "train": cls.TRAIN,
+                "test": cls.TEST,
+                "valid": cls.VALID,
+        }[name]
+
+    @classmethod
+    def mse_metrics(cls):
+        if cls.TRAIN:
+            return "train_mse"
+        if cls.VALID:
+            return "valid_mse"
+        if cls.TEST:
+            return "test_mse"
+
 class FeatureTargetPair:
     def __init__(
         self, 

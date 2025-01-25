@@ -91,6 +91,12 @@ class DataTransform(TabularDataTransform):
         return Pairs(self.train_pair, self.valid_pair, self.test_pair)
 
     def print_shapes(self):
+        if self.train_pair is None:
+            raise ValueError("train pair should exist")
+        if self.test_pair is None:
+            raise ValueError("train pair should exist")
+        if self.valid_pair is None:
+            raise ValueError("train pair should exist")
         ddict = {
             Stage.TRAIN.name: {
                 "X": self.train_pair.X.shape,
@@ -137,6 +143,12 @@ class DataTransform(TabularDataTransform):
         return path
 
     def shape_check(self):
+        if self.train_pair is None:
+            raise ValueError("train pair should exist")
+        if self.test_pair is None:
+            raise ValueError("train pair should exist")
+        if self.valid_pair is None:
+            raise ValueError("train pair should exist")
         train_column_num = self.train_pair.X.shape[1]
         valid_column_num = self.valid_pair.X.shape[1]
         test_column_num = self.test_pair.X.shape[1]
@@ -150,6 +162,9 @@ class DataTransform(TabularDataTransform):
 
 
     def split_stage(self):
+        if self.transformed_data is None:
+            raise ValueError("transformed_data should null")
+
         train_cols = self.enum.feature(self.transformed_data.columns)
         train = self.transformed_data[train_cols]
         test = self.transformed_data[self.enum.target()]

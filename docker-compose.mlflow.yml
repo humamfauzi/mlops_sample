@@ -19,6 +19,9 @@ services:
     image: humamf/py-mlflow
     ports:
       - "${MLFLOW_PORT}:${MLFLOW_PORT}"
+    environment:
+      AWS_ACCESS_KEY: ${AWS_ACCESS_KEY}
+      AWS_SECRET_KEY: ${AWS_SECRET_KEY}
     command:
       - mlflow
       - server
@@ -28,6 +31,8 @@ services:
       - ${MLFLOW_PORT}
       - --backend-store-uri
       - 'postgresql://mlflow_user:mlflow_password@database:5432/db'
+      - --artifacts-destination
+      - s3://humamf-artifacts
     depends_on:
       database:
         condition: service_healthy

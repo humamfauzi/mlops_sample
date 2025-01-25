@@ -1,4 +1,4 @@
-from train.scenario_manager import ScenarioManager, PreprocessScenarioManager
+from train.scenario_manager import ScenarioManager, PreprocessScenarioManager, ModelScenarioManager
 from train.column import CommodityFlow
 import os
 import random
@@ -8,6 +8,11 @@ import train.data_loader as data_loader
 import train.data_cleaner as data_cleaner
 import train.data_transform as data_transform
 import train.model as model
+
+from sklearn.linear_model import LinearRegression, ElasticNet, Lasso
+from sklearn.tree import DecisionTreeRegressor
+from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor
+from sklearn.neighbors import KNeighborsRegressor
 
 DATASET_PATH = "dataset/cfs_2017.csv"
 TRACKER_PATH = os.getenv("TRACKER_PATH")
@@ -28,32 +33,35 @@ def train2():
     mlflow.set_tracking_uri(uri=TRACKER_PATH)
     mlflow.set_experiment(experiment_name)
     with mlflow.start_run(run_name=generated_run_name):
-        (PreprocessScenarioManager()
+        psm = (PreprocessScenarioManager()
             .set_dataloader(dataloader)
             .set_datacleaner(datacleaner)
             .set_datatransform(datatransform)
             .set_tracking(TRACKER_PATH, experiment_name)
-            .preprocess())
+            .preprocess()
+            .get_run_name())
+        (ModelScenarioManager()
+            .set_dataloader(dataloader)
+            .load_data(psm)
+            .set_tracking(TRACKER_PATH, experiment_name)
+            .add_model(LinearRegression())
+            .add_model(ElasticNet())
+            .add_model(Lasso())
+            .add_model(DecisionTreeRegressor())
+            .add_model(RandomForestRegressor())
+            .add_model(GradientBoostingRegressor())
+            .add_model(KNeighborsRegressor())
+            .train()
+            .get_potential_candidates(3)
+            .tag_champion())
 
 
 
 def train():
     dataloader = data_loader.Disk(DATASET_PATH, CommodityFlow, chunk=200_000)
-    datacleaner = data_cleaner.DataFrame()
-    datatransform = data_transform.DataTransform(CommodityFlow)
-    generated_run_name = generate_random_string(6)
-    mmodel = model.Model().set_scenario(model.ModelScenario.MULTI_REGRESSION)
-    (ScenarioManager()
-        .set_run_name(RUN_NAME)
-        .set_tracking(TRACKER_PATH, "humamtest")
-        .start_run(generated_run_name)
+    msm = (ModelScenarioManager()
         .set_dataloader(dataloader)
-        .set_datacleaner(datacleaner)
-        .set_datatransform(datatransform)
-        .set_train(mmodel)
-        .default_path()
-        .end_run()
-     )
+        .load_data(psm))
 
 if __name__ == "__main__":
     train2()
