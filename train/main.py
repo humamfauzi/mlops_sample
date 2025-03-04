@@ -1,5 +1,5 @@
 from train.scenario_manager import ScenarioManager, PreprocessScenarioManager, ModelScenarioManager
-from train.column import CommodityFlow
+from column.cfs2017 import CommodityFlow
 import os
 import random
 import mlflow
@@ -28,16 +28,12 @@ def train2():
     dataloader = data_loader.Disk(DATASET_PATH, CommodityFlow, chunk=1000)
     datacleaner = data_cleaner.DataFrame()
     datatransform = data_transform.DataTransform(CommodityFlow)
+
     generated_run_name = generate_random_string(6)
     experiment_name = "humamtest"
     mlflow.set_tracking_uri(uri=TRACKER_PATH)
     mlflow.set_experiment(experiment_name)
-    with mlflow.start_run(run_name=generated_run_name) as parent_run:
-        mlflow.set_tag("intention", "gridsearch")
-        # for some reason we need to manually retrieve the run
-        active_run = mlflow.active_run()
-        parent_run_id = active_run.info.run_id
-        print("paret", parent_run.info)
+    with mlflow.start_run(run_name=generated_run_name):
         psm = (PreprocessScenarioManager()
             .set_tracking(TRACKER_PATH, experiment_name)
             .set_dataloader(dataloader)

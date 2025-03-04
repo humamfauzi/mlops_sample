@@ -8,7 +8,9 @@ from abc import ABC, abstractmethod
 from sklearn.preprocessing import OneHotEncoder, MinMaxScaler
 from sklearn.model_selection import train_test_split
 
-from train.column import TabularColumn
+from column.cfs2017 import CommodityFlow
+from column.abc import TabularColumn
+
 from train.sstruct import Pairs, Stage, FeatureTargetPair
 
 class TabularDataTransform(ABC):

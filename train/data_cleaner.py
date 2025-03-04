@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from train.column import CommodityFlow
+from column.cfs2017 import CommodityFlow
 import pandas as pd
 from copy import copy
 
