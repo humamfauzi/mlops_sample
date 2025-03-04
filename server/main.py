@@ -1,17 +1,12 @@
 import async_timeout
 import asyncio
 import os
-import pickle
-from mlflow.tracking import MlflowClient
-import numpy as np
 from types import Dict
-import mlflow
 from fastapi import FastAPI, Request, Query
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse
 from server.model import ModelRepository
 import server.response as response
-from train.column import CommodityFlow
 from types import Dict
 
 PORT = os.getenv("PORT")
@@ -36,7 +31,7 @@ class TimeoutMiddleware(BaseHTTPMiddleware):
             )
 
 app = FastAPI()
-# Add the middleware to your FastAPI application
+# Add timeout middleware to limit the request
 app.add_middleware(TimeoutMiddleware, timeout=3) 
 
 # a singleton model provider
@@ -49,10 +44,7 @@ async def startup_event():
 # check the connection for the server
 @app.get("/health")
 async def health():
-    return JSONResponse(
-        content={"message": "ok"},
-        status_code=202
-    )
+    return JSONResponse(content={"message": "ok"}, status_code=200)
 
 # Primary endpoint for getting all available model for CFS 2017 problems
 @app.get("/cfs2017")
@@ -78,55 +70,3 @@ async def cfs2017ModelInference(request: Request, q: Dict = Query(...)):
         return response.ErrorResponse(code=401, message=message).to_json_response()
     result = CFS2017_MODEL_REPOSITORY.infer(model, filtered)
     return response.InferenceResponse(message="success", data=result).to_json_response()
-
-# MLFlow class handling loading artifacts for server.
-class MlFlowManagement:
-    def __init__(self, tracking_url, name):
-        self.tracking_url = tracking_url
-        self.experiment = name
-        self.client = None
-
-    def begin(self):
-        mlflow.set_tracking_uri(uri=self.tracking_url)
-        mlflow.set_experiment(self.experiment)
-        return self
-
-    def set_client(self):
-        client = MlflowClient()
-        self.client = client
-        return self
-
-    def set_artifact_destination(self, destination):
-        self.artifact_destination = destination
-        return self
-
-    def find_latest_run(self):
-        experiment_id = 1
-        runs = self.client.search_runs(experiment_ids=[experiment_id], order_by=["start_time DESC"], max_results=1)
-        if runs:
-            latest_run_id = runs[0].info.run_id
-            return latest_run_id
-        else:
-            raise ValueError("failed to find the latest run")
-
-    def find_desired_run_id(self):
-        # TODO should find a training result with production tag
-        # for now use the latest run 
-        return self.find_latest_run()
-
-    def columns(self):
-        return [
-            CommodityFlow.DESTINATION_STATE,
-            CommodityFlow.ORIGIN_STATE,
-            CommodityFlow.MODE,
-            CommodityFlow.SHIPMENT_DISTANCE_ROUTE,
-            CommodityFlow.NAICS,
-            CommodityFlow.SHIPMENT_WEIGHT
-        ]
-
-    def load_all_artifacts(self):
-        run_id = self.find_desired_run_id()
-        uri = f"mlflow-artifacts:/1/{run_id}/artifacts"
-        all = mlflow.artifacts.list_artifacts(artifact_uri=uri)
-        mlflow.artifacts.download_artifacts(artifact_uri=uri, dst_path=f"{self.artifact_destination}")
-        return self

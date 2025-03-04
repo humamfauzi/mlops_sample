@@ -30,7 +30,6 @@ class InputBase:
     key: str
     display: str
 
-
 @dataclass
 class CategoricalInput(InputBase):
     """Categorical input item for the model metadata response"""
@@ -44,7 +43,6 @@ class CategoricalInput(InputBase):
             "display": self.display,
             "enumeration": self.enumeration
         }
-
 
 @dataclass
 class NumericalInput(InputBase):
@@ -102,7 +100,7 @@ class Model:
     def __init__(self, run_id: str):
         self.run_id = run_id
 
-    def load_metadata(self, directory: str):
+    def load_metadata(self, directory: str) -> "Model":
         """
         Load metadata from json to dataclass TabularModel
         """
@@ -122,7 +120,7 @@ class Model:
         )
         return self
 
-    def load_model(self, directory: str):
+    def load_model(self, directory: str) -> "Model":
         """
         Load model pickle
         """
@@ -134,7 +132,7 @@ class Model:
                     self.predict_func = pickle.load(f).predict
         return self
 
-    def load_preprocess(self, directory: str):
+    def load_preprocess(self, directory: str) -> "Model":
         """
         Load preprocess from directory. The preprocess is divided by key/columns in dataset.
         Each column might have multiple preprocess therefore it is likely to have more that one pickle 
@@ -154,7 +152,7 @@ class Model:
                 self.preprocess[key] = function_container
         return self
 
-    def load_postprocess(self, directory: str):
+    def load_postprocess(self, directory: str) -> "Model":
         """
         Similar to preprocess but this is only applies to a column. A tabular machine learning only
         have one output therefore there is no need to iterate for column
@@ -182,6 +180,13 @@ class Model:
         return result
 
     def infer(self, data: Dict[str, Any]) -> NumericalOutput:
+        """
+        Infer would 
+        1. preprocess data using preprocess function that loaded via load_preprocess method
+        2. predict the data using predict function that loaded via load_model method
+        3. postprocess the result using postprocess function that loaded via load_postprocess method
+        4. return the result and inference time
+        """
         input = self.preprocess(data)
         start_time = time.time()
         result = self.predict(input)
@@ -189,9 +194,6 @@ class Model:
         elapsed = time.time() - start_time
         result.time_elapsed = timedelta(seconds=elapsed)
         return NumericalOutput(value=result, time_elapsed=elapsed) 
-
-    def handle_encoder(self, encoder, value):
-        return encoder.transform(np.array(value).reshape(1, -1).astype(np.int64))
 
     def short_description(self) -> ShortDescription:
         return ShortDescription(
@@ -246,10 +248,10 @@ class ModelRepository:
             uri = f"mlflow-artifacts:/{self.experiment_id}/{run.info.run_id}/artifacts"
             destination_path = "artifacts/{run.info.run_id}"
             mlflow.artifacts.download_artifacts(artifact_uri=uri, dst_path=destination_path)
-            model = Model(run.info.run_id)
-            model.load_preprocess(destination_path)
-            model.load_model(destination_path)
-            model.read_metadata(destination_path)
+            model = (Model(run.info.run_id)
+                .load_preprocess(destination_path)
+                .load_model(destination_path)
+                .load_metadata(destination_path))
             self.models.append(model)
         return self
 
