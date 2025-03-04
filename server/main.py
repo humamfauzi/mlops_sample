@@ -1,10 +1,10 @@
 import async_timeout
 import asyncio
 import os
-import numpy as np
-import pandas as pd
 import pickle
 from mlflow.tracking import MlflowClient
+import numpy as np
+from types import Dict
 import mlflow
 from fastapi import FastAPI, Request, Query
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -36,10 +36,9 @@ app = FastAPI()
 # Add the middleware to your FastAPI application
 app.add_middleware(TimeoutMiddleware, timeout=3) 
 
-
 @app.on_event("startup")
 async def startup_event():
-    mgmt = (MlFlowManagement(TRACKER_PATH, "humamtest")
+    (MlFlowManagement(TRACKER_PATH, "humamtest")
         .begin()
         .set_client()
         .set_artifact_destination(ARTIFACT_DIR)
