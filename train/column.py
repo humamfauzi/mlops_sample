@@ -42,6 +42,7 @@ class TabularColumn(ABC):
         pass
 
 # NOTE: the number in enumerate should correspond to column number it will later replaced
+# all usage should be using its name therefore the column would be full capital
 class CommodityFlow(Enum):
     SHIPMENT_ID = 1
 
@@ -79,39 +80,40 @@ class CommodityFlow(Enum):
 
     @classmethod
     def primary_id(cls):
-        return cls.SHIPMENT_ID
+        return cls.SHIPMENT_ID.name
 
     @classmethod
     def target(cls):
-        return cls.SHIPMENT_VALUE
+        return cls.SHIPMENT_VALUE.name
 
     @classmethod
     def categorical(cls):
         return [
-            cls.ORIGIN_STATE,
-            cls.ORIGIN_DISTRICT,
-            cls.ORIGIN_CFS_AREA,
+            cls.ORIGIN_STATE.name,
+            cls.ORIGIN_DISTRICT.name,
+            cls.ORIGIN_CFS_AREA.name,
 
-            cls.DESTINATION_STATE,
-            cls.DESTINATION_DISTRICT, 
-            cls.DESTINATION_CFS_AREA,
+            cls.DESTINATION_STATE.name,
+            cls.DESTINATION_DISTRICT.name, 
+            cls.DESTINATION_CFS_AREA.name,
 
-            cls.NAICS,
-            cls.QUARTER,
-            cls.SCTG,
-            cls.MODE,
+            cls.NAICS.name,
+            cls.QUARTER.name,
+            cls.SCTG.name,
+            cls.MODE.name,
 
-            cls.EXPORT_COUNTRY,
-            cls.HAZMAT,
+            cls.EXPORT_COUNTRY.name,
+            cls.HAZMAT.name,
         ]
 
     @classmethod
     def numerical(cls):
         return [
-            cls.SHIPMENT_WEIGHT, 
-            cls.SHIPMENT_DISTANCE_CIRCLE,
-            cls.SHIPMENT_DISTANCE_ROUTE,
-            cls.WEIGHT_FACTOR,
+            cls.SHIPMENT_WEIGHT.name, 
+            cls.SHIPMENT_DISTANCE_CIRCLE.name,
+            cls.SHIPMENT_DISTANCE_ROUTE.name,
+            cls.WEIGHT_FACTOR.name,
+            cls.SHIPMENT_VALUE.name,
         ]
 
     @classmethod

@@ -10,19 +10,20 @@ class Stage(Enum):
     @classmethod
     def from_enum(cls, name: str):
         return {
-                "train": cls.TRAIN,
-                "test": cls.TEST,
-                "valid": cls.VALID,
+            "train": cls.TRAIN,
+            "test": cls.TEST,
+            "valid": cls.VALID,
         }[name]
 
     @classmethod
-    def mse_metrics(cls):
-        if cls.TRAIN:
+    def mse_metrics(cls, s: 'Stage'):
+        if s == cls.TRAIN:
             return "train_mse"
-        if cls.VALID:
+        if s == cls.VALID:
             return "valid_mse"
-        if cls.TEST:
+        if s == cls.TEST:
             return "test_mse"
+        return None
 
 class FeatureTargetPair:
     def __init__(
@@ -42,6 +43,13 @@ class FeatureTargetPair:
 
     def x_array(self) -> np.ndarray:
         return np.array(self.X)
+    
+    def y_array(self) -> np.ndarray:
+        """
+        Most target in sklearn only accept array with single dimension
+        therefore we need to offer an options to lower single dimension
+        """
+        return np.array(self.y).reshape(-1)
 
 class Pairs:
     def __init__(self, train, valid, test):

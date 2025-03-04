@@ -24,32 +24,31 @@ class DataFrame(TabularDataCleaner):
     def basic_removal(self):
         return [
             # using states to limit column number
-            CommodityFlow.ORIGIN_DISTRICT,
-            CommodityFlow.ORIGIN_CFS_AREA,
-            CommodityFlow.DESTINATION_DISTRICT,
-            CommodityFlow.DESTINATION_CFS_AREA,
+            CommodityFlow.ORIGIN_DISTRICT.name,
+            CommodityFlow.ORIGIN_CFS_AREA.name,
+            CommodityFlow.DESTINATION_DISTRICT.name,
+            CommodityFlow.DESTINATION_CFS_AREA.name,
 
             # we use NAICS as goods categarization
-            CommodityFlow.SCTG,
-            CommodityFlow.QUARTER,
+            CommodityFlow.SCTG.name,
+            CommodityFlow.QUARTER.name,
 
             # we use actual route instead of geodesic distance
-            CommodityFlow.SHIPMENT_DISTANCE_CIRCLE,
+            CommodityFlow.SHIPMENT_DISTANCE_CIRCLE.name,
 
             # we disable all options
-            CommodityFlow.IS_TEMPERATURE_CONTROLLED,
-            CommodityFlow.IS_EXPORT,
-            CommodityFlow.EXPORT_COUNTRY,
-            CommodityFlow.HAZMAT,
-            CommodityFlow.WEIGHT_FACTOR,
+            CommodityFlow.IS_TEMPERATURE_CONTROLLED.name,
+            CommodityFlow.IS_EXPORT.name,
+            CommodityFlow.EXPORT_COUNTRY.name,
+            CommodityFlow.HAZMAT.name,
+            CommodityFlow.WEIGHT_FACTOR.name,
         ]
 
     def clean_data(self, df: pd.DataFrame) -> pd.DataFrame:
         self.cleaned_data = df
         (self
             .remove_columns(self.basic_removal())
-            .remove_nan_rows()
-         )
+            .remove_nan_rows())
         return copy(self.cleaned_data)
     
     def remove_columns(self, columns):

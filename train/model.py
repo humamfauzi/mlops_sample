@@ -31,9 +31,7 @@ class ModelScenario(Enum):
 # parent class which is this
 class Model(TabularModel):
     def __init__(self):
-        self.train_pair: Optional[FeatureTargetPair] = None
-        self.valid_pair: Optional[FeatureTargetPair] = None
-        self.test_pair: Optional[FeatureTargetPair] = None
+        self.pairs = Optional[Pairs]
 
         self.is_using_tracker = False
         self.tracker_path = None
@@ -55,9 +53,6 @@ class Model(TabularModel):
     # the objective with train data is that
     # it would send metrics to mlflow and save artifacts there
     def train_data(self, pairs: Pairs) -> 'Model':
-        self.train_pair = pairs.get_train_pair()
-        self.valid_pair = pairs.get_valid_pair()
-        self.test_pair = pairs.get_test_pair()
         if self.scenario == ModelScenario.MULTI_REGRESSION:
             return self.train_data_with_multiple_regression()
         else:

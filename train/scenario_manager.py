@@ -3,9 +3,11 @@ from mlflow.models import infer_signature
 
 import time
 import random
+import pickle
 from train.data_loader import TabularDataLoader
 from train.data_cleaner import TabularDataCleaner
 from train.data_transform import TabularDataTransform
+from train.dataset import TrackingDataset
 from train.model import TabularModel
 from typing import Optional
 from train.sstruct import FeatureTargetPair, Pairs, Stage
@@ -20,14 +22,22 @@ class PreprocessScenarioManager:
         self.datacleaner: Optional[TabularDataCleaner] = None
         self.datatransform: Optional[TabularDataTransform] = None
         self.experiment_name: Optional[str] = None
+        self.run_name =  ""
         return
-
+    
+    # GETTER & SETTER
     def set_dataloader(self, dl: TabularDataLoader):
+        if self.experiment_name is None:
+            raise ValueError("need to set experiment name")
         self.dataloader = dl
+        self.dataloader.set_tracking_path(self.tracking_path)
+        self.dataloader.set_experiment(self.experiment_name)
         return self
+
     def set_datacleaner(self, dc: TabularDataCleaner):
         self.datacleaner = dc
         return self
+
     def set_datatransform(self, dt: TabularDataTransform):
         self.datatransform = dt
         return self
@@ -48,6 +58,29 @@ class PreprocessScenarioManager:
 
     def get_run_name(self) -> str:
         return self.run_name
+
+    ## primara function
+    def describe_dataset(self):
+        if self.dataloader is None:
+            raise ValueError("Require a data loader")
+        start = time.time()
+        describe = self.dataloader.describe_all_numerical_data()
+        dataset = TrackingDataset("/dataset/cfs2017", "cfs2017", "Commodity Flow Survey 2017")
+        with mlflow.start_run(run_name = "ASD" , nested=True):
+            mlflow.set_tag("purpose", "describe")
+            mlflow.log_metric("duration", time.time() - start)
+            for col in describe:
+                dataset.set_numerical_column_properties(
+                    col, 
+                    describe[col]["mean"], 
+                    describe[col]["count"],
+                    describe[col]["stddev"], 
+                    describe[col]["sum"],
+                    describe[col]["min"],
+                    describe[col]["max"],
+                )
+            mlflow.log_input(dataset, context="description")
+        return self
 
     def preprocess(self):
         if self.dataloader is None:
@@ -132,9 +165,11 @@ class ModelScenarioManager:
             with mlflow.start_run(run_name = run_name , nested=True):
                 model_name = mod.__class__.__name__
                 ftp = self.pick_pair(Stage.TRAIN)
-                mod.fit(ftp.x_array(), ftp.y)
+                mod.fit(ftp.x_array(), ftp.y_array())
                 mlflow.log_metric("total_trained", ftp.X.shape[0])
                 mlflow.log_metric("total_features", ftp.X.shape[1])
+                mlflow.set_tag("purpose", "model")
+                mlflow.set_tag("level", "candidate")
                 self.check_mse_against(mod, Stage.TRAIN)
                 self.check_mse_against(mod, Stage.VALID)
                 mlflow.sklearn.log_model(
@@ -144,30 +179,61 @@ class ModelScenarioManager:
                     input_example=ftp.x_array()[:5],
                     registered_model_name=f"{run_name}/{model_name}",
                 )
-                mlflow.set_tag("purpose", "model")
         return self
 
-    def get_potential_candidates(self, num: int):
+    def get_potential_candidates(self, parent_run_id: str, num: int):
         '''
         Based on the run, choose number of candidate that came as top.
         '''
-        if self.experiment_name is None:
-            raise ValueError("experiment name should exist; use .set_tracking()")
-        result = mlflow.search_runs(
-            experiment_name = self.experiment_name,
-            order_by=[f"metrics.{Stage.VALID.mse_metrics()} DESC"],
+        client = mlflow.tracking.MlflowClient()
+        # Search for child runs with the parent run ID
+        child_runs = client.search_runs(
+            experiment_ids=[1],
+            filter_string=f"tags.mlflow.parentRunId = '{parent_run_id}'",
+            order_by=[f"metrics.{Stage.mse_metrics(Stage.VALID)}"]
         )
-        print(">>>>>>", result)
+        for cr in child_runs[:3]:
+            client.set_tag(cr.info.run_id, "level", "test")
         return self
 
-    def tag_champion(self):
-        
+    def test_runs(self, parent_run_id: str):
+        client = mlflow.tracking.MlflowClient()
+        # Search for child runs with the parent run ID
+        child_runs = client.search_runs(
+            experiment_ids=[1],
+            filter_string=f"tags.mlflow.parentRunId = '{parent_run_id}' and tags.level = 'test'",
+        )
+        for cr in child_runs:
+            mod = self.load_model(cr)
+            self.check_mse_against(mod, Stage.TEST)
+        return self
+
+    def load_model(self, run):
+        client = mlflow.tracking.MlflowClient()
+        run = client.get_run(run.info.run_id)
+        uri = f"mlflow-artifacts:/1/{run.info.run_id}/artifacts/model/model.pkl"
+        dest = "/tmp/mlflow/artifacts"
+        mlflow.artifacts.download_artifacts(artifact_uri=uri, dst_path=dest)
+        with open(f"{dest}/model.pkl", 'rb') as f:
+            model = pickle.load(f)
+            return model
+
+    def tag_champion(self, parent_run_id: str):
+        client = mlflow.tracking.MlflowClient()
+        # Search for child runs with the parent run ID
+        child_runs = client.search_runs(
+            experiment_ids=[1],
+            filter_string=f"tags.mlflow.parentRunId = '{parent_run_id}' AND tags.level = 'test'",
+            order_by=[f"metrics.{Stage.mse_metrics(Stage.TEST)}"]
+        )
+        best = child_runs[0]
+        client.set_tag(best.info.run_id, "level", "champion")
         return self
 
     def check_mse_against(self, mod, stage: Stage):
         ftp = self.pick_pair(stage)
-        mse = mean_squared_error(ftp.y, mod.predict(ftp.x_array()))
-        mlflow.log_metric(stage.mse_metrics(), mse)
+        mse = mean_squared_error(ftp.y_array(), mod.predict(ftp.x_array()))
+        mlflow.log_metric(Stage.mse_metrics(stage), mse)
         return self
 
 # deprecated; should either use PreprocessScenarioManager or ModelScenarioManager

@@ -8,7 +8,6 @@ from abc import ABC, abstractmethod
 from sklearn.preprocessing import OneHotEncoder, MinMaxScaler
 from sklearn.model_selection import train_test_split
 
-from train.column import CommodityFlow
 from train.column import TabularColumn
 from train.sstruct import Pairs, Stage, FeatureTargetPair
 
@@ -80,7 +79,7 @@ class DataTransform(TabularDataTransform):
 
     # while the transformation is not a training, we still need to collect
     # artifacts for transformation therefore we need to know the run name
-    def set_run_name(self, name):
+    def set_run_name(self, name: str):
         self.run_name = name
         return self
     
@@ -198,7 +197,7 @@ class DataTransform(TabularDataTransform):
     def _transform_ohe(self, pair, cat):
         arrayed = pair.X[[cat]]
         transformed = self.ohe[cat].transform(arrayed)
-        encoded_columns = self.ohe[cat].get_feature_names_out([cat.name])
+        encoded_columns = self.ohe[cat].get_feature_names_out([cat])
         new_columns = pd.DataFrame(transformed, columns=encoded_columns)
         pair.X.drop(cat, axis=1, inplace=True)
         arrayed = np.concat([np.array(pair.X), new_columns], axis=1)
