@@ -9,7 +9,10 @@ import mlflow
 from fastapi import FastAPI, Request, Query
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse
+from server.model import ModelRepository
+import server.response as response
 from train.column import CommodityFlow
+from types import Dict
 
 PORT = os.getenv("PORT")
 TRACKER_PATH = os.getenv("TRACKER_PATH") 
@@ -36,104 +39,45 @@ app = FastAPI()
 # Add the middleware to your FastAPI application
 app.add_middleware(TimeoutMiddleware, timeout=3) 
 
+# a singleton model provider
+CFS2017_MODEL_REPOSITORY = None
 @app.on_event("startup")
 async def startup_event():
-    (MlFlowManagement(TRACKER_PATH, "humamtest")
-        .begin()
-        .set_client()
-        .set_artifact_destination(ARTIFACT_DIR)
-        .load_all_artifacts()
-    )
+    global CFS2017_MODEL_REPOSITORY
+    CFS2017_MODEL_REPOSITORY = ModelRepository(TRACKER_PATH, "humamtest").load()
 
+# check the connection for the server
 @app.get("/health")
 async def health():
-    return {
-        "message": "ok"
-    }
-
-@app.get("/cfs2017")
-async def cfs2017(request: Request):
-    raw: Dict[str, str] = dict(request.query_params)
-    missing_variable = precheck(raw)
-    if len(missing_variable) > 0:
-        return JSONResponse(
-            status_code=401,
-            content={
-                "message": "lack of required variable",
-                "data": missing_variable
-            }
-        )
-    transformed = transform(raw)
-    cost = infer(transformed)
     return JSONResponse(
-        status_code=200,
-        content={
-            "message": "success",
-            "data": {
-                "cost": cost,
-            }
-        }
+        content={"message": "ok"},
+        status_code=202
     )
 
-# TODO move transofrmation to MLFlow Management, endpoint should only use it
-def transform(raw):
-    # column order should match the input transformation in train/train.py
-    mapp = {
-        "origin_state": CommodityFlow.ORIGIN_STATE,
-        "destination_state": CommodityFlow.DESTINATION_STATE,
-        "naics": CommodityFlow.NAICS,
-        "mode": CommodityFlow.MODE,
-        "shipment_weight": CommodityFlow.SHIPMENT_WEIGHT,
-        "shipment_distance_route": CommodityFlow.SHIPMENT_DISTANCE_ROUTE,
-    }
-    container = []
-    for key, value in raw.items():
-        new_value = implement_preprocess(mapp[key], value)
-        container.append(new_value)
-    return np.concat(container, axis=1)
+# Primary endpoint for getting all available model for CFS 2017 problems
+@app.get("/cfs2017")
+async def cfs2017():
+    all_model = CFS2017_MODEL_REPOSITORY.list()
+    return response.ListResponse(message="success", data=all_model).to_json_response()
 
-def implement_preprocess(col, original_value):
-    # TODO it need loaded once when the handler start running
-    # so any request just use loaded pickle; not reading from disk
-    directory_path = f"{ARTIFACT_DIR}/artifacts/preprocess/{col}"
-    files = [f for f in os.listdir(directory_path) if os.path.isfile(os.path.join(directory_path, f))]
-    # if there is no files, it means there are no transformation for that column.
-    # so we just return the original value
-    for file in files:
-        with open(f"{directory_path}/{file}", 'rb') as f:
-            encoder = pickle.load(f)
-            return handle_encoder(encoder, original_value)
-    return original_value
+# Primary endpoint for getting all metadata about the model
+@app.get("/cfs2017/{model}/metadata")
+async def cfs2017ModelMetadata(request: Request):
+    model = request.path_params["model"]
+    metadata = CFS2017_MODEL_REPOSITORY.metadata(model_name=model)
+    return response.MetadataReponse(message="success", data=metadata).to_json_response()
 
-def handle_encoder(encoder, value):
-    return encoder.transform(np.array(value).reshape(1, -1).astype(np.int64))
-
-
-def precheck(raw):
-    important = [
-        "origin_state",
-        "destination_state",
-        "naics",
-        "mode",
-        "shipment_weight",
-        "shipment_distance_route",
-    ]
-    not_exist_key = []
-    for i in important:
-        if i not in raw.keys():
-            not_exist_key.append(i) 
-    return not_exist_key
-
-MODEL = None
-def infer(iinput):
-    global MODEL
-    if MODEL is None:
-        directory_path = f"{ARTIFACT_DIR}/artifacts/cfs_model/model.pkl"
-        with open(directory_path, 'rb') as f:
-            model = pickle.load(f)
-            MODEL = model
-            return model.predict(iinput)[0]
-    return MODEL.predict(iinput)[0]
+# Primary endpoint for inference using the model
+@app.get("/cfs2017/{model}/inference")
+async def cfs2017ModelInference(request: Request, q: Dict = Query(...)):
+    model = request.path_params["model"]
+    # filter first so any thing that goes to inference model is only
+    # what the model requires and discard any extra input
+    filtered, message = CFS2017_MODEL_REPOSITORY.validate_input(model, q)
+    if message is not "":
+        return response.ErrorResponse(code=401, message=message).to_json_response()
+    result = CFS2017_MODEL_REPOSITORY.infer(model, filtered)
+    return response.InferenceResponse(message="success", data=result).to_json_response()
 
 # MLFlow class handling loading artifacts for server.
 class MlFlowManagement:

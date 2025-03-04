@@ -1,4 +1,4 @@
-from train.scenario_manager import ScenarioManager, PreprocessScenarioManager, ModelScenarioManager
+from train.scenario_manager import PreprocessScenarioManager, ModelScenarioManager
 from column.cfs2017 import CommodityFlow
 import os
 import random
