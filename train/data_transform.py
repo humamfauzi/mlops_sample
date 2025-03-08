@@ -12,6 +12,8 @@ from column.cfs2017 import CommodityFlow
 from column.abc import TabularColumn
 
 from train.sstruct import Pairs, Stage, FeatureTargetPair
+from train.wrapper import ProcessWrapper
+from typing import Optional
 
 class TabularDataTransform(ABC):
     @abstractmethod
@@ -21,6 +23,210 @@ class TabularDataTransform(ABC):
     @abstractmethod
     def set_run_name(self, name: str):
         pass
+
+# TODO find out if we make this class generics for column level
+class DataTransfromLazyCall(TabularDataTransform):
+    def __init__(self, tracking_path, experiment_name, column: TabularColumn):
+        self.train_pair:  Optional[FeatureTargetPair] = None
+        self.valid_pair:  Optional[FeatureTargetPair] = None
+        self.test_pair:  Optional[FeatureTargetPair] = None
+        self.column = column
+
+        self.transformed_data: Optional[pd.DataFrame] = None
+        self.save_function_container = []
+        # TODO probably needs its own dataclass 
+        self.teansformation_function_container = {
+            "post": {
+                # columns: {
+                #    "transformation_name": transformation_function
+                # }
+            },
+            "pre": {}
+        }
+        self.tracking_path = tracking_path
+        self.experiment_name = experiment_name
+        self.transformation_function_container = []
+        self.transformation_save_function_container = []
+
+    def add_log_transformation(self, column):
+        '''
+        Add log transformation to a column
+        it does not need transform and fit like min max because
+        it does not need any anchoring point
+        '''
+        transformation_name = "log"
+        if column not in self.column:
+            raise ValueError(f"column {column} not exist")
+        if column not in self.column.numerical():
+            raise ValueError(f"column {column} is not numerical")
+        if column not in self.transformation["pre"].keys():
+            self.transformation["pre"][column] = {} 
+        pw = ProcessWrapper(np.log, np.exp)
+        self.transformation["pre"][column][transformation_name] = pw.transform
+        self.transformation["post"][column][transformation_name]= pw.inverse_transform
+        def save():
+            base_dir = "artifacts/process"
+            self._save_processing_as_blob(base_dir, "pre", column, transformation_name)
+            self._save_processing_as_blob(base_dir, "post", column, transformation_name)
+        self.transformation_save_function_container.append(save)
+        return self
+
+    def add_min_max_transformation(self, column):
+        '''
+        Add min max transformation to a column
+        it does not need transform and fit like min max because
+        it does not need any anchoring point
+        '''
+        transformation_name = "min_max"
+        if column not in self.column:
+            raise ValueError(f"column {column} not exist")
+        if column not in self.column.numerical():
+            raise ValueError(f"column {column} is not numerical")
+        if column not in self.transformation["pre"].keys():
+            self.transformation["pre"][column] = {}
+        self.transformation["pre"][column][transformation_name] = MinMaxScaler().transform
+        self.trasnformation["post"][column][transformation_name] = MinMaxScaler().inverse_transform
+
+        def save():
+            base_dir = "artifacts/process"
+            self._save_processing_as_blob(base_dir, "pre", column, transformation_name)
+            self._save_processing_as_blob(base_dir, "post", column, transformation_name)
+        self.transformation_save_function_container.append(save)
+        return self
+
+    def add_one_hot_encoding_transformation(self, column):
+        '''
+        Add one hot encoding transformation to a column
+        it does not need transform and fit like min max because
+        it does not need any anchoring point
+        '''
+        transformation_name = "one_hot_encoding"
+        if column not in self.column:
+            raise ValueError(f"column {column} not exist")
+        if column not in self.column.categorical():
+            raise ValueError(f"column {column} is not categorical")
+        if column not in self.transformation["pre"].keys():
+            self.transformation["pre"][column] = {}
+        ohe = OneHotEncoder(sparse_output=False, handle_unknown='infrequent_if_exist')
+        self.transformation["pre"][column][transformation_name] = ohe.transform
+        def save():
+            base_dir = "artifacts/process"
+            self._save_processing_as_blob(base_dir, "pre", column, transformation_name)
+        self.transformation_save_function_container.append(save)
+        return self
+
+    def _save_processing_as_blob(self, directory, placement, column, name):
+        fn = self.teansformation_function_container[placement][column][name]
+        os.makedirs(f'{directory}/{placement}/{column}', exist_ok=True)
+        path = f'{directory}/{placement}/{column}/{name}.pkl'
+        with open(path, 'wb') as f:
+            pickle.dump(fn, f)
+        return path
+
+    def _setup_transformation(self):
+        '''
+        Fitting all transformation to the training data
+        the transformation is not in this function
+        '''
+        for column, function_map in self.transformation["pre"].items():
+            for _, function in function_map.items():
+                if column in self.train_pair.Y.columns:
+                    function.fit(self.train_pair.Y)
+                    continue
+                function.fit(self.train_pair.X[column])
+        return
+
+    def _applies_transformation_to_all(self):
+        '''
+        applies all transformation to all stages based on the training data
+        '''
+        for column, function_map in self.transformation["pre"].items():
+            for _, function in function_map.items():
+                for pairs in [self.train_pair, self.valid_pair, self.test_pair]:
+                    if column in pairs.Y.columns:
+                        pairs.Y = function.transform(pairs.Y)
+                        continue
+                    pairs.X[column] = function.transform(pairs.X[column]) 
+        return self
+
+    def transform_data(self, df):
+        self.transformed_data = df
+        (self
+            # all data should be splitted first here
+            # so all encoding and transformation is based on training data
+            # to prevent learning leakage. All transformation happen between
+            # splitting and reapplied
+            ._split_stage()
+
+            # call all collected transformation based on train data but
+            # does not applies it to train immdiately
+            ._setup_transformation()
+
+            # call all transformation function and applies it to all stages
+            ._applies_transformation_to_all()
+
+            # ensure that every stage has the same column count
+            ._shape_check()
+
+            # call function to save the transformation to model repository
+            # for future retrieval
+            ._save_transformation()
+        )
+
+        return self.get_pairs()
+
+    def _get_pairs(self) -> Pairs:
+        return Pairs(self.train_pair, self.valid_pair, self.test_pair)
+
+    def _split_stage(self):
+        if self.transformed_data is None:
+            raise ValueError("transformed_data should exist")
+
+        train_cols = self.enum.feature(self.transformed_data.columns)
+        train = self.transformed_data[train_cols]
+        test = self.transformed_data[self.enum.target()]
+        Xtr, Xt, ytr, yt = train_test_split(
+                train,
+                test,
+                test_size=0.2,
+                random_state=42,
+        )
+        Xv, Xte, yv, yte = train_test_split(
+                Xt,
+                yt,
+                test_size=0.5,
+                random_state=42,
+        )
+        self.train_pair = FeatureTargetPair(Xtr, ytr, Stage.TRAIN)
+        self.valid_pair = FeatureTargetPair(Xv, yv, Stage.VALID)
+        self.test_pair = FeatureTargetPair(Xte, yte, Stage.TEST)
+        return self
+
+    def _shape_check(self):
+        if self.train_pair is None:
+            raise ValueError("train pair should exist")
+        if self.test_pair is None:
+            raise ValueError("train pair should exist")
+        if self.valid_pair is None:
+            raise ValueError("train pair should exist")
+        train_column_num = self.train_pair.X.shape[1]
+        valid_column_num = self.valid_pair.X.shape[1]
+        test_column_num = self.test_pair.X.shape[1]
+        if train_column_num != valid_column_num:
+            raise ValueError("number of column in train and valid should be the same")
+        if train_column_num != test_column_num:
+            raise ValueError("number of column in train and test should be the same")
+        if test_column_num != valid_column_num:
+            raise ValueError("number of column in test and valid should be the same")
+        return self
+
+    def _save_transformation(self):
+        dir = "artifacts/process"
+        for save_fn in self.transformation_save_function_container:
+            save_fn()
+        mlflow.log_artifacts(dir, artifact_path="preprocess")
+        return self
+
 
 class DataTransform(TabularDataTransform):
     def __init__(self, enum: TabularColumn):

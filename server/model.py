@@ -94,7 +94,7 @@ class TabularModel:
 class Model:
     information: TabularModel
     run_id: str
-    preprocess: Dict[str, Any]
+    preprocess_map: Dict[str, Any]
     predict_func: function
 
     def __init__(self, run_id: str):
@@ -138,7 +138,7 @@ class Model:
         Each column might have multiple preprocess therefore it is likely to have more that one pickle 
         in each column. We try our best to keep all process commutative.
         """
-        self.preprocess = {}
+        self.preprocess_map = {}
         preprocess_directory = f"{directory}/preprocess"
         preprocess_key = os.listdir(preprocess_directory)
         for key in preprocess_key:

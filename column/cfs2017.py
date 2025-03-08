@@ -1,8 +1,9 @@
 from enum import Enum, classmethod
+from column.abc import Column
 from typing import List
 
 # NOTE: the number in enumerate should correspond to column number it will later replaced
-class CommodityFlow(Enum):
+class CommodityFlow(Enum, Column):
     SHIPMENT_ID = 1
 
     # State idenfitifer using FIPS state code
