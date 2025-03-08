@@ -7,6 +7,7 @@ from typing import Optional
 from train.sstruct import Pairs, Stage, FeatureTargetPair
 from train.column import TabularColumn
 
+
 class TabularDataFrameLoader(ABC):
     @abstractmethod
     def load_data(self) -> pd.DataFrame:
@@ -98,7 +99,6 @@ class LoadParquetPairsFromDisk(TabularPairsLoader):
         defined = mlflow.data.from_pandas(xtr, name=self.directory)
         mlflow.log_input(defined)
         return Pairs(ftrain, fvalid, ftest)
-        pass
 
 class SavePairsToDiskAsParquet(TabularPairsSaver):
     def __init__(self, directory: str):
@@ -210,3 +210,91 @@ class Disk(TabularDataLoader):
         defined = mlflow.data.from_pandas(xtr, name=directory)
         mlflow.log_input(defined)
         return Pairs(ftrain, fvalid, ftest)
+
+class Disk:
+    def __init__(self, path, name: str):
+        self.path = path
+        self.name = name
+        self.loader: Optional[function] = None
+        self.saver: Optional[function] = None
+
+
+    def load_dataframe_via_csv(self, column: TabularColumn, load_options: dict):
+        def loader() -> pd.DataFrame:
+            raw_data = pd.read_csv(f"{self.path}/{self.name}.csv", **load_options)
+            raw_data = self._replace_columns(raw_data, column)
+            defined = mlflow.data.from_pandas(raw_data, name=self.name)
+            mlflow.log_input(defined)
+            return copy(self.raw_data)
+        self.loader = loader
+        return self
+        
+    def load_data(self):
+        if self.loader is None:
+            raise ValueError("should define the loading method first")
+        return self.loader()
+
+    def save_via_csv(self, name: str):
+        def saver(data: pd.DataFrame):
+            path = f'dataset/{name}'
+            if not os.path.exists(path):
+                os.makedirs(path)
+            data.to_csv(path, index=False)
+        self.saver = saver
+        return self
+    
+    def save_pair_via_parquet(self):
+        def saver(pairs: Pairs):
+            base = f"{self.path}/{self.name}"
+            (self.save_parquet_data(pairs.train.X, f"{base}/train/feature.parquet")
+                .save_parquet_data(pairs.train.y.to_frame(), f"{base}/train/target.parquet")
+                .save_parquet_data(pairs.valid.X, f"{base}/valid/feature.parquet")
+                .save_parquet_data(pairs.valid.y.to_frame(), f"{base}/valid/target.parquet")
+                .save_parquet_data(pairs.test.X, f"{base}/test/feature.parquet")
+                .save_parquet_data(pairs.test.y.to_frame(), f"{base}/test/target.parquet"))
+        self.saver = saver
+        return self
+
+    def _save_parquet_data(self, df: pd.DataFrame, output: str):
+        path = f'dataset/{output}'
+        dir = "/".join(path.split("/")[:-1])
+        if not os.path.exists(dir):
+            os.makedirs(dir)
+        df.to_parquet(path, index=False)
+        return self
+
+    def load_pair_via_parquet(self):
+        def loader() -> pd.DataFrame:
+            base = f"{self.path}/{self.name}"
+            xtr = pd.read_parquet(f"{base}/train/feature.parquet")
+            ytr = pd.read_parquet(f"{base}/train/target.parquet")
+            ftrain = FeatureTargetPair(xtr, ytr, Stage.TRAIN)
+
+            xval = pd.read_parquet(f"{base}/valid/feature.parquet")
+            yval = pd.read_parquet(f"{base}/valid/target.parquet")
+            fvalid = FeatureTargetPair(xval, yval, Stage.VALID)
+
+            xte = pd.read_parquet(f"{base}/test/feature.parquet")
+            yte = pd.read_parquet(f"{base}/test/target.parquet")
+            ftest = FeatureTargetPair(xte, yte, Stage.TEST)
+            defined = mlflow.data.from_pandas(xtr, name=self.path)
+            mlflow.log_input(defined)
+            return Pairs(ftrain, fvalid, ftest)
+        self.loader = loader
+        return self
+
+    @staticmethod
+    def replace_columns(data: pd.DataFrame, enum: TabularColumn):
+        Disk._check_length(data, enum)
+        # it has minus one because index in python began with 0
+        replace_map = {data.columns[e.value-1]:e.name for e in enum}
+        data.rename(columns=replace_map, inplace=True)
+        return data
+
+    @staticmethod
+    def _check_length(data: pd.DataFrame, enum: TabularColumn):
+        if data is None:
+            raise ValueError("raw data need to be loaded first")
+        if len(enum) != len(data.columns):
+            raise ValueError(f"Cannot replace columns: enum {len(enum)} df {len(data.columns)}")
+        return data

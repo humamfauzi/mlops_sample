@@ -4,7 +4,7 @@ from mlflow.models import infer_signature
 import time
 import random
 import pickle
-from train.data_loader import TabularDataLoader
+from train.data_io import TabularDataLoader
 from train.data_cleaner import TabularDataCleaner
 from train.data_transform import TabularDataTransform
 from train.dataset import TrackingDataset

@@ -2,7 +2,7 @@ import pandas as pd
 import pytest
 import os
 
-from .data_loader import Disk
+from .data_io import Disk
 from enum import Enum
 
 class SampleEnum(Enum):
@@ -34,8 +34,9 @@ class TestDisk:
     of the Disk class using Enum-based column mapping.
     """
 
-    def test_load_data(self, path):
-        disk = Disk(path, SampleEnum)
+    def test_load_dataframe_via_csv(self, path):
+        disk = (Disk(path, SampleEnum, "test")
+            .load_dataframe_via_csv(SampleEnum, {}))
         df = disk.load_data()
         assert isinstance(df, pd.DataFrame)
         assert df.shape == (1,3)

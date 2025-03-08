@@ -4,7 +4,7 @@ import os
 import random
 import mlflow
 
-import train.data_loader as data_loader
+import train.data_io as data_io
 import train.data_cleaner as data_cleaner
 import train.data_transform as data_transform
 import train.model as model
@@ -27,7 +27,7 @@ def generate_random_string(length: int) -> str:
     return final
 
 def multimodel_train():
-    dataloader = data_loader.Disk(DATASET_PATH, CommodityFlow, chunk=1000)
+    dataloader = data_io.Disk(DATASET_PATH, CommodityFlow, chunk=1000)
     datacleaner = data_cleaner.DataFrame()
     datatransform = data_transform.DataTransform(CommodityFlow)
 
@@ -64,7 +64,7 @@ def describer():
     generated_run_name = generate_random_string(6)
     mlflow.set_tracking_uri(uri=TRACKER_PATH)
     mlflow.set_experiment(experiment_name)
-    dataloader = data_loader.Disk(DATASET_PATH, CommodityFlow, chunk=200_000)
+    dataloader = data_io.Disk(DATASET_PATH, CommodityFlow, chunk=200_000)
     with mlflow.start_run(run_name=generated_run_name) as parent_run:
         mlflow.set_tag("intention", "describe")
         (PreprocessScenarioManager()
@@ -75,26 +75,56 @@ def describer():
 
 def base_train():
     experiment_name = "humamtest"
-    dataloader = data_loader.Disk(DATASET_PATH, CommodityFlow, chunk=200_000)
+    dataloader = data_io.Disk(DATASET_PATH, CommodityFlow, chunk=200_000)
     msm = (ModelScenarioManager()
         .set_dataloader(dataloader)
         .load_data(experiment_name))
 
 def singular_train():
+    '''
+    This is the base train function. It is used to train a single model.
+    It only use shipment weight as a feature. Use this function to verify the training process.
+    '''
     experiment_name = "humamtest"
-    data_cleaner_lazy_call = (data_cleaner.DataFrameLazyCall().
+
+    # In this scenarion, preprocess need to read csv data from disk
+    # and save preprocessed file in a form of parquet file
+    data_loader_preprocess = (data_io.Disk(DATASET_PATH, "cfs2017")
+        .load_dataframe_via_csv(CommodityFlow, {"rows": 200_000})
+        .save_pair_via_parquet())
+
+    data_loader_train = (data_io.Disk(DATASET_PATH, "cfs2017")
+        .load_pair_via_parquet())
+
+    data_cleaner_lc = (data_cleaner.DataFrameLazyCall().
         filter_column([CommodityFlow.SHIPMENT_WEIGHT]).
         remove_nan_rows())
-    data_transformer = (data_transform.DataTransfromLazyCall().
+    data_transformer_lc = (data_transform.DataTransfromLazyCall(TRACKER_PATH, experiment_name=experiment_name).
         add_log_transformation(CommodityFlow.SHIPMENT_VALUE).
         add_min_max_transformation(CommodityFlow.SHIPMENT_WEIGHT)
-
     )
-    msm = (ModelScenarioManager()
-        .set_dataloader(data_loader.RandomDiskLoader(DATASET_PATH, CommodityFlow, chunk=200_000))
-        .set_datacleaner(data_cleaner_lazy_call)
+    generated_run_name = generate_random_string(6)
+    experiment_name = "humamtest"
+    mlflow.set_tracking_uri(uri=TRACKER_PATH)
+    mlflow.set_experiment(experiment_name)
+    with mlflow.start_run(run_name=generated_run_name) as parent_run_id:
+        run_name = (PreprocessScenarioManager()
+            .set_dataloader(data_loader_preprocess)
+            .set_datacleaner(data_cleaner_lc)
+            .set_datatransform(data_transformer_lc)
+            .preprocess()
+            .get_run_name())
+        (ModelScenarioManager()
+            .set_tracking
+            .set_dataloader(data_loader_train)
+            .load_data(run_name)
+            .add_model(LinearRegression())
+            .train()
+            .get_potential_candidates(parent_run_id, 1)
+            .test_runs(parent_run_id)
+            .tag_champion(parent_run_id))
+    return
 
-    )
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Run different functions.")
