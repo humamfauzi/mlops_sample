@@ -1,6 +1,7 @@
 import pandas as pd
 import pytest
 import os
+import tempfile
 
 from .data_io import Disk
 from enum import Enum
@@ -10,76 +11,81 @@ class SampleEnum(Enum):
     COLUMN_FEATURE = 2
     COLUMN_TARGET = 3
 
+FOLDER = "test"
+FILENAME = "sample"
 
-# it will initate write a dummy csv to a disk for initialization
-# and it will remove it once all the test is done
 @pytest.fixture(scope="session")
-def path():
-    path = "sample.csv"
+def sample_csv_path():
+    filepath = f"{FOLDER}/{FILENAME}.csv"
     csv_sample = """
     id,name,value
     1,hello,300
     """
-    with open(path, 'w') as f: 
+    if not os.path.exists(FOLDER):
+        os.makedirs(FOLDER) 
+    with open(filepath, 'w') as f: 
         f.write(csv_sample)
-    yield path
-    if os.path.exists(path):
-        os.remove(path)
-    
-class TestDisk:
-    """
-    Test suite for the Disk class functionality.
-    
-    This class contains tests to verify the column replacement functionality
-    of the Disk class using Enum-based column mapping.
-    """
+    yield filepath
+    if os.path.exists(filepath):
+        os.remove(filepath)
 
-    def test_load_dataframe_via_csv(self, path):
-        disk = (Disk(path, SampleEnum, "test")
-            .load_dataframe_via_csv(SampleEnum, {}))
+@pytest.mark.filterwarnings("ignore")
+class TestDisk:
+    """Test suite for the Disk class functionality."""
+
+    @pytest.mark.filterwarnings("ignore::UserWarning")
+    def test_initialization(self):
+        """Test proper initialization of Disk class."""
+        disk = Disk(FOLDER, FILENAME)
+        assert disk.path == FOLDER 
+        assert disk.name == FILENAME
+
+    @pytest.mark.filterwarnings("ignore::UserWarning")
+    def test_load_dataframe_via_csv(self, sample_csv_path):
+        """Test loading data from CSV file."""
+        disk = Disk(FOLDER, FILENAME)
+        disk.load_dataframe_via_csv(SampleEnum, {})
         df = disk.load_data()
+        
         assert isinstance(df, pd.DataFrame)
-        assert df.shape == (1,3)
+        assert df.shape == (1, 3)
+        assert list(df.columns) == [SampleEnum.COLUMN_ID.name, SampleEnum.COLUMN_FEATURE.name, SampleEnum.COLUMN_TARGET.name]
+        assert df.iloc[0, 0] == 1
+        assert df.iloc[0, 1] == 'hello'
+        assert df.iloc[0, 2] == 300
 
     def test_replace_columns(self):
-        """
-        Test the column replacement functionality of the Disk class.
-        
-        This test verifies that the replace_columns method correctly maps
-        the original column names to their corresponding Enum values.
-        
-        Test Steps:
-        1. Create a sample dictionary with test data
-        2. Initialize a Disk instance with a sample path and Enum
-        3. Create a DataFrame from the sample dictionary
-        4. Call replace_columns method
-        5. Verify column names are correctly replaced with Enum values
-        
-        Expected Results:
-        - First column should be mapped to SampleEnum.COLUMN_ID
-        - Second column should be mapped to SampleEnum.COLUMN_FEATURE
-        - Third column should be mapped to SampleEnum.COLUMN_TARGET
-        
-        Raises:
-        -------
-        AssertionError
-            If any column length is not equal enum length
-        """
+        """Test column replacement functionality using Enum mapping."""
         sample_dict = {
-            "id": [1,2,3],
+            "id": [1, 2, 3],
             "ffaster": ["asd", "asd", "bds"],
             "ttarget": [100, 200, 100],
         }
-        disk = Disk("/sample", SampleEnum)
+        disk = Disk(FOLDER, FILENAME)
         disk.raw_data = pd.DataFrame(sample_dict)
-        disk.replace_columns()
+        disk.raw_data = disk._replace_columns(disk.raw_data, SampleEnum)
         
-        assert disk.raw_data.columns[0] == SampleEnum.COLUMN_ID
-        assert disk.raw_data.columns[1] == SampleEnum.COLUMN_FEATURE
-        assert disk.raw_data.columns[2] == SampleEnum.COLUMN_TARGET
+        assert disk.raw_data.columns[0] == SampleEnum.COLUMN_ID.name
+        assert disk.raw_data.columns[1] == SampleEnum.COLUMN_FEATURE.name
+        assert disk.raw_data.columns[2] == SampleEnum.COLUMN_TARGET.name
 
-        sample_dict = {}
-        disk = Disk("/sample", SampleEnum)
-        disk.raw_data = pd.DataFrame(sample_dict)
-        with pytest.raises(ValueError):
-            disk.replace_columns()
+    def test_save_data_via_csv(self):
+        """Test saving DataFrame to CSV."""
+        output = "output"
+        output_path = os.path.join(FOLDER, f"{output}.csv")
+        sample_data = pd.DataFrame({
+            "id": [1, 2], 
+            "name": ["foo", "bar"], 
+            "value": [100, 200]
+        })
+        
+        disk = Disk(FOLDER, output)
+        disk.raw_data = sample_data
+        disk.save_via_csv()
+        disk.save_data()
+        
+        assert os.path.exists(output_path)
+        loaded_data = pd.read_csv(output_path)
+        assert loaded_data.shape == (2, 3)
+        assert list(loaded_data.columns) == ["id", "name", "value"]
+

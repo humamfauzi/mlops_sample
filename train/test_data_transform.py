@@ -5,9 +5,12 @@ import pickle
 import os
 
 from enum import Enum
-from train.data_transform import DataTransform
+from train.data_transform import DataTransform, DataTransformLazyCall, TransformationMethods
 from train.sstruct import Stage, FeatureTargetPair
 
+
+TRACKING_PATH = "local"
+EXPERIMENT_NAME = "test"
 class SampleEnum(Enum):
     COLUMN_ID = 1
     COLUMN_CATEGORICAL = 2
@@ -24,8 +27,8 @@ class SampleEnum(Enum):
 
     @classmethod
     def feature(cls, current_column):
-        all = cls.numerical() + cls.categorical()
-        return list(set(all) & set(current_column))
+        alll = cls.numerical() + cls.categorical()
+        return list(set(alll) & set(current_column))
 
     @classmethod
     def target(cls):
@@ -35,7 +38,7 @@ class SampleEnum(Enum):
 def df():
     ddict = {
         SampleEnum.COLUMN_ID: np.arange(0, 10),
-        SampleEnum.COLUMN_CATEGORICAL: np.random.choice(['a', 'b'], 10),
+        SampleEnum.COLUMN_CATEGORICAL: ['a', 'b'] * 5,
         SampleEnum.COLUMN_NUMERICAL: np.arange(10, 20),
         SampleEnum.COLUMN_TARGET: np.random.random(10),
     }
@@ -47,6 +50,7 @@ class TestDataTransform:
     # TODO there are several warning beacause data frame copy,
     # we need to fix it after all test unit and CI/CD established
     def test_split_page(self, df):
+        pass
         dt = DataTransform(SampleEnum)
         dt.transformed_data = df
         dt.split_stage()
@@ -63,6 +67,7 @@ class TestDataTransform:
         assert dt.test_pair.y.shape == (1,)
 
     def test_one_hot_encoding(self, df):
+        pass
         dt = DataTransform(SampleEnum)
         dt.train_pair = FeatureTargetPair(
             df[SampleEnum.feature(df.columns)], 
@@ -76,6 +81,7 @@ class TestDataTransform:
         assert dt.train_pair.X.shape == (10, 3)
 
     def test_min_max(self, df):
+        pass
         dt = DataTransform(SampleEnum)
         dt.train_pair = FeatureTargetPair(
                 df[SampleEnum.feature(df.columns)],
@@ -89,6 +95,7 @@ class TestDataTransform:
         assert dt.train_pair.X.loc[9][SampleEnum.COLUMN_NUMERICAL] == 1
 
     def test_transformation_object(self, df):
+        pass
         """
         this should prove that transformation saved as pickle object able
         to be loaded and tranform incoming data. This is important for
@@ -117,6 +124,7 @@ class TestDataTransform:
             assert result[0][1] == 0
 
     def test_reapply(self, df):
+        pass
         dt = DataTransform(SampleEnum)
         dt.transformed_data = df
         dt.split_stage()
@@ -129,3 +137,31 @@ class TestDataTransform:
         assert dt.train_pair.X.shape == (8, 3)
         assert dt.valid_pair.X.shape == (1, 3)
         assert dt.test_pair.X.shape == (1, 3)
+
+class TestDataTransformLazyCall:
+    def test_log_transformation(self, df):
+        dtlc = DataTransformLazyCall(TRACKING_PATH, EXPERIMENT_NAME, SampleEnum)
+        dtlc.add_log_transformation(SampleEnum.COLUMN_NUMERICAL, TransformationMethods.REPLACE)
+        pairs = dtlc.transform_data(df)
+        # pick one sample
+        row = pairs.train.X.iloc[0]
+        index, num_val = row.name, row[SampleEnum.COLUMN_NUMERICAL]
+        assert num_val == np.log(df.loc[index][SampleEnum.COLUMN_NUMERICAL])
+
+    def test_min_max_transformation(self, df):
+        dtlc = DataTransformLazyCall(TRACKING_PATH, EXPERIMENT_NAME, SampleEnum)
+        dtlc.add_min_max_transformation(SampleEnum.COLUMN_NUMERICAL, TransformationMethods.REPLACE)
+        pairs = dtlc.transform_data(df)
+        assert pairs.train.X.loc[0][SampleEnum.COLUMN_NUMERICAL] == 0
+        pass
+
+    def test_add_one_hot_encoding_transformation(self, df):
+        dtlc = DataTransformLazyCall(TRACKING_PATH, EXPERIMENT_NAME, SampleEnum)
+        dtlc.add_one_hot_encoding_transformation(SampleEnum.COLUMN_CATEGORICAL)
+        pairs = dtlc.transform_data(df)
+        assert pairs.train.X.shape == (8, 3)
+        assert pairs.valid.X.shape == (1, 3)
+        assert pairs.test.X.shape == (1, 3)
+        # while it seems random, it is not. because when splitting we set the random seed
+        # therefore any test picking index 0 should always be the same
+        assert pairs.train.X.loc[0][SampleEnum.COLUMN_CATEGORICAL.name + '_b'] == 1

@@ -1,6 +1,4 @@
 from abc import ABC, abstractmethod
-
-
 class TabularColumn(ABC):
     @abstractmethod
     def primary_id(cls):

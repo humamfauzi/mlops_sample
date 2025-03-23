@@ -13,19 +13,34 @@ from column.abc import TabularColumn
 
 from train.sstruct import Pairs, Stage, FeatureTargetPair
 from train.wrapper import ProcessWrapper
+from dataclasses import dataclass, field
 from typing import Optional
+from enum import Enum
 
 class TabularDataTransform(ABC):
     @abstractmethod
     def transform_data(self, df: pd.DataFrame) -> Pairs:
         pass
 
-    @abstractmethod
-    def set_run_name(self, name: str):
-        pass
+class TransformationMethods(Enum):
+    # would replace the original column with the transformation
+    REPLACE = 1
+    # would append the transformation to the original column; the original
+    # column would still exist
+    APPEND = 2
+
+    # would append the transformation to the original column and remove the original
+    APPEND_AND_REMOVE = 3
+
+@dataclass
+class Keeper:
+    name: str
+    column: Enum
+    function: any
+    methods: TransformationMethods
 
 # TODO find out if we make this class generics for column level
-class DataTransfromLazyCall(TabularDataTransform):
+class DataTransformLazyCall(TabularDataTransform):
     def __init__(self, tracking_path, experiment_name, column: TabularColumn):
         self.train_pair:  Optional[FeatureTargetPair] = None
         self.valid_pair:  Optional[FeatureTargetPair] = None
@@ -35,20 +50,23 @@ class DataTransfromLazyCall(TabularDataTransform):
         self.transformed_data: Optional[pd.DataFrame] = None
         self.save_function_container = []
         # TODO probably needs its own dataclass 
-        self.teansformation_function_container = {
-            "post": {
-                # columns: {
-                #    "transformation_name": transformation_function
-                # }
-            },
-            "pre": {}
+        self.transformation = {
+            # columns: {
+            #     #    "transformation_name": transformation_function
+            #     # }
+            # },
         }
+        self.keeper_array = []
+        # TODO Maybe we should split tracker and data transformation
         self.tracking_path = tracking_path
         self.experiment_name = experiment_name
-        self.transformation_function_container = []
-        self.transformation_save_function_container = []
 
-    def add_log_transformation(self, column):
+        self.transformation_save_function_container = []
+    
+    def get_pairs(self) -> Pairs:
+        return Pairs(self.train_pair, self.valid_pair, self.test_pair)
+
+    def add_log_transformation(self, column, methods: TransformationMethods):
         '''
         Add log transformation to a column
         it does not need transform and fit like min max because
@@ -59,19 +77,23 @@ class DataTransfromLazyCall(TabularDataTransform):
             raise ValueError(f"column {column} not exist")
         if column not in self.column.numerical():
             raise ValueError(f"column {column} is not numerical")
-        if column not in self.transformation["pre"].keys():
-            self.transformation["pre"][column] = {} 
+        if column not in self.transformation.keys():
+            self.transformation[column] = {} 
         pw = ProcessWrapper(np.log, np.exp)
-        self.transformation["pre"][column][transformation_name] = pw.transform
-        self.transformation["post"][column][transformation_name]= pw.inverse_transform
+        keeper = Keeper(
+            name="log",
+            column= column, 
+            function= pw, 
+            methods= methods
+            )
+        self.keeper_array.append(keeper)
         def save():
             base_dir = "artifacts/process"
-            self._save_processing_as_blob(base_dir, "pre", column, transformation_name)
-            self._save_processing_as_blob(base_dir, "post", column, transformation_name)
+            self._save_processing_as_blob(base_dir, keeper)
         self.transformation_save_function_container.append(save)
         return self
 
-    def add_min_max_transformation(self, column):
+    def add_min_max_transformation(self, column, methods: TransformationMethods):
         '''
         Add min max transformation to a column
         it does not need transform and fit like min max because
@@ -82,43 +104,51 @@ class DataTransfromLazyCall(TabularDataTransform):
             raise ValueError(f"column {column} not exist")
         if column not in self.column.numerical():
             raise ValueError(f"column {column} is not numerical")
-        if column not in self.transformation["pre"].keys():
-            self.transformation["pre"][column] = {}
-        self.transformation["pre"][column][transformation_name] = MinMaxScaler().transform
-        self.trasnformation["post"][column][transformation_name] = MinMaxScaler().inverse_transform
-
+        if column not in self.transformation.keys():
+            self.transformation[column] = {}
+        keeper = Keeper(
+            name="min_max",
+            column= column, 
+            function= MinMaxScaler(), 
+            methods= methods
+            )
+        self.keeper_array.append(keeper)
         def save():
             base_dir = "artifacts/process"
-            self._save_processing_as_blob(base_dir, "pre", column, transformation_name)
-            self._save_processing_as_blob(base_dir, "post", column, transformation_name)
+            self._save_processing_as_blob(base_dir, keeper)
         self.transformation_save_function_container.append(save)
         return self
 
     def add_one_hot_encoding_transformation(self, column):
         '''
         Add one hot encoding transformation to a column
-        it does not need transform and fit like min max because
-        it does not need any anchoring point
+        it only offers transformation methods of append and remove
         '''
         transformation_name = "one_hot_encoding"
         if column not in self.column:
             raise ValueError(f"column {column} not exist")
         if column not in self.column.categorical():
             raise ValueError(f"column {column} is not categorical")
-        if column not in self.transformation["pre"].keys():
-            self.transformation["pre"][column] = {}
+        if column not in self.transformation.keys():
+            self.transformation[column] = {}
         ohe = OneHotEncoder(sparse_output=False, handle_unknown='infrequent_if_exist')
-        self.transformation["pre"][column][transformation_name] = ohe.transform
+        keeper = Keeper(
+            name="one_hot_encoding",
+            column= column, 
+            function= ohe, 
+            methods= TransformationMethods.APPEND_AND_REMOVE
+            )
+        self.keeper_array.append(keeper)
         def save():
             base_dir = "artifacts/process"
-            self._save_processing_as_blob(base_dir, "pre", column, transformation_name)
+            self._save_processing_as_blob(base_dir, keeper)
         self.transformation_save_function_container.append(save)
         return self
 
-    def _save_processing_as_blob(self, directory, placement, column, name):
-        fn = self.teansformation_function_container[placement][column][name]
-        os.makedirs(f'{directory}/{placement}/{column}', exist_ok=True)
-        path = f'{directory}/{placement}/{column}/{name}.pkl'
+    def _save_processing_as_blob(self, directory, keeper):
+        fn = keeper.function
+        os.makedirs(f'{directory}/{keeper.column}', exist_ok=True)
+        path = f'{directory}/{keeper.column}/{keeper.name}.pkl'
         with open(path, 'wb') as f:
             pickle.dump(fn, f)
         return path
@@ -128,25 +158,56 @@ class DataTransfromLazyCall(TabularDataTransform):
         Fitting all transformation to the training data
         the transformation is not in this function
         '''
-        for column, function_map in self.transformation["pre"].items():
-            for _, function in function_map.items():
-                if column in self.train_pair.Y.columns:
-                    function.fit(self.train_pair.Y)
-                    continue
-                function.fit(self.train_pair.X[column])
-        return
+        for keeper in self.keeper_array:
+            if keeper.column in self.train_pair.X.columns:
+                keeper.function.fit(self.train_pair.X[keeper.column].to_numpy().reshape(-1, 1))
+            else:
+                keeper.function.fit(self.train_pair.y.to_numpy().reshape(-1, 1))
+        return self
+
+
+    def _replace(self, keeper):
+        print("keeper", keeper)
+        for pairs in [self.train_pair, self.valid_pair, self.test_pair]:
+            if keeper.column in self.train_pair.X.columns:
+                transformed = keeper.function.transform(pairs.X[keeper.column].to_numpy().reshape(-1, 1))
+                print("3333", keeper.column)
+                print("0000", transformed)
+                print("1111", pairs.X[keeper.column])
+                pairs.X[keeper.column] = transformed
+            else:
+                pairs.y = function.transform(pairs.y.to_numpy().reshape(-1,1))
+
+    def _append(self, keeper):
+        for pairs in [self.train_pair, self.valid_pair, self.test_pair]:
+            if keeper.column not in pairs.X.columns:
+                raise ValueError(f"column {keeper.column} is not a feature")
+            transformed = keeper.function.transform(self.train_pair.X[keeper.column].to_numpy().reshape(-1, 1))
+            pairs.X[keeper.column] = transformed
+
+    def _append_and_remove(self, keeper):
+        for pairs in [self.train_pair, self.valid_pair, self.test_pair]:
+            if keeper.column not in pairs.X.columns:
+                raise ValueError(f"column {keeper.column} is not a feature")
+            transformed = keeper.function.transform(pairs.X[keeper.column].to_numpy().reshape(-1, 1))
+            encoded_columns = keeper.function.get_feature_names_out([keeper.column.name])
+            new_columns = pd.DataFrame(transformed, columns=encoded_columns, dtype='int')
+            pairs.X = pairs.X.drop(keeper.column, axis=1)
+            arrayed = np.concat([np.array(pairs.X), new_columns], axis=1)
+            all_columns = list(pairs.X.columns) + list(new_columns.columns)
+            pairs.X = pd.DataFrame(arrayed, columns=all_columns)
 
     def _applies_transformation_to_all(self):
         '''
         applies all transformation to all stages based on the training data
         '''
-        for column, function_map in self.transformation["pre"].items():
-            for _, function in function_map.items():
-                for pairs in [self.train_pair, self.valid_pair, self.test_pair]:
-                    if column in pairs.Y.columns:
-                        pairs.Y = function.transform(pairs.Y)
-                        continue
-                    pairs.X[column] = function.transform(pairs.X[column]) 
+        for keeper in self.keeper_array:
+            if keeper.methods == TransformationMethods.REPLACE:
+                self._replace(keeper)
+            elif keeper.methods == TransformationMethods.APPEND:
+                self._append(keeper)
+            elif keeper.methods == TransformationMethods.APPEND_AND_REMOVE:
+                self._append_and_remove(keeper)
         return self
 
     def transform_data(self, df):
@@ -182,9 +243,9 @@ class DataTransfromLazyCall(TabularDataTransform):
         if self.transformed_data is None:
             raise ValueError("transformed_data should exist")
 
-        train_cols = self.enum.feature(self.transformed_data.columns)
+        train_cols = self.column.feature(self.transformed_data.columns)
         train = self.transformed_data[train_cols]
-        test = self.transformed_data[self.enum.target()]
+        test = self.transformed_data[self.column.target()]
         Xtr, Xt, ytr, yt = train_test_split(
                 train,
                 test,
@@ -405,7 +466,8 @@ class DataTransform(TabularDataTransform):
     def _transform_ohe(self, pair, cat):
         arrayed = pair.X[[cat]]
         transformed = self.ohe[cat].transform(arrayed)
-        encoded_columns = self.ohe[cat].get_feature_names_out([cat])
+        # need to use cat.bane for feature names out becuase append operation
+        encoded_columns = self.ohe[cat].get_feature_names_out([cat.name])
         new_columns = pd.DataFrame(transformed, columns=encoded_columns)
         pair.X.drop(cat, axis=1, inplace=True)
         arrayed = np.concat([np.array(pair.X), new_columns], axis=1)

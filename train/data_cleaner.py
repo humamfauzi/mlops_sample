@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod
 from column.cfs2017 import CommodityFlow
 import pandas as pd
 from copy import copy
-from types import Optional
+from typing import Optional
 
 class TabularDataCleaner(ABC):
     @abstractmethod
@@ -29,7 +29,7 @@ class DataFrameLazyCall(TabularDataCleaner):
         self.call_container = []
     
     def clean_data(self, df: pd.DataFrame) -> pd.DataFrame:
-        self.cleaned_data = df
+        self.cleaned_data = df.copy()
         for call in self.call_container:
             call()
         return copy(self.cleaned_data)

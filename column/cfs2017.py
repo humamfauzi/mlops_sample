@@ -1,9 +1,9 @@
-from enum import Enum, classmethod
-from column.abc import Column
+from enum import Enum
+from column.abc import TabularColumn
 from typing import List
 
 # NOTE: the number in enumerate should correspond to column number it will later replaced
-class CommodityFlow(Enum, Column):
+class CommodityFlow(Enum):
     SHIPMENT_ID = 1
 
     # State idenfitifer using FIPS state code
@@ -83,6 +83,3 @@ class CommodityFlow(Enum, Column):
         """
         all = cls.numerical() + cls.categorical()
         return list(set(all) & set(current_column))
-
-
-
