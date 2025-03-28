@@ -49,7 +49,7 @@ class TestDisk:
         
         assert isinstance(df, pd.DataFrame)
         assert df.shape == (1, 3)
-        assert list(df.columns) == [SampleEnum.COLUMN_ID.name, SampleEnum.COLUMN_FEATURE.name, SampleEnum.COLUMN_TARGET.name]
+        assert list(df.columns) == [SampleEnum.COLUMN_ID, SampleEnum.COLUMN_FEATURE, SampleEnum.COLUMN_TARGET]
         assert df.iloc[0, 0] == 1
         assert df.iloc[0, 1] == 'hello'
         assert df.iloc[0, 2] == 300
@@ -65,9 +65,9 @@ class TestDisk:
         disk.raw_data = pd.DataFrame(sample_dict)
         disk.raw_data = disk._replace_columns(disk.raw_data, SampleEnum)
         
-        assert disk.raw_data.columns[0] == SampleEnum.COLUMN_ID.name
-        assert disk.raw_data.columns[1] == SampleEnum.COLUMN_FEATURE.name
-        assert disk.raw_data.columns[2] == SampleEnum.COLUMN_TARGET.name
+        assert disk.raw_data.columns[0] == SampleEnum.COLUMN_ID
+        assert disk.raw_data.columns[1] == SampleEnum.COLUMN_FEATURE
+        assert disk.raw_data.columns[2] == SampleEnum.COLUMN_TARGET
 
     def test_save_data_via_csv(self):
         """Test saving DataFrame to CSV."""

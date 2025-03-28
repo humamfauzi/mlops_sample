@@ -74,8 +74,6 @@ class DataTransformLazyCall(TabularDataTransform):
         transformation_name = "log"
         if column not in self.column:
             raise ValueError(f"column {column} not exist")
-        print("column", column)
-        print("numerical", self.column.numerical())
         if column not in self.column.numerical():
             raise ValueError(f"column {column} is not numerical")
         pw = ProcessWrapper(np.log, np.exp)
@@ -165,13 +163,9 @@ class DataTransformLazyCall(TabularDataTransform):
 
 
     def _replace(self, keeper):
-        print("keeper", keeper)
         for pairs in [self.train_pair, self.valid_pair, self.test_pair]:
             if keeper.column in self.train_pair.X.columns:
                 transformed = keeper.function.transform(pairs.X[keeper.column].to_numpy().reshape(-1, 1))
-                print("3333", keeper.column)
-                print("0000", transformed)
-                print("1111", pairs.X[keeper.column])
                 pairs.X[keeper.column] = transformed
             else:
                 pairs.y = function.transform(pairs.y.to_numpy().reshape(-1,1))
@@ -243,7 +237,6 @@ class DataTransformLazyCall(TabularDataTransform):
 
         train_cols = self.column.feature(self.transformed_data.columns)
         train = self.transformed_data[train_cols]
-        print(">>>>>>>>>>>>>>", self.transformed_data.columns)
         test = self.transformed_data[self.column.target()]
         Xtr, Xt, ytr, yt = train_test_split(
                 train,

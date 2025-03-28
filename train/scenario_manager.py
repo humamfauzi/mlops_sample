@@ -103,7 +103,7 @@ class PreprocessScenarioManager:
             })
             mlflow.set_tag("purpose", "preprocess")
             mlflow.log_metric("duration", time.time() - start)
-            self.dataloader.save_data()
+            self.dataloader.save_data(pairs)
             self.run_name = run_name
         return self
 
@@ -118,10 +118,10 @@ class ModelScenarioManager:
         self.dataloader = dataloader
         return self
 
-    def load_data(self, directory: str):
+    def load_data(self):
         if self.dataloader is None: 
             raise ValueError("data loader is not exist")
-        self.pairs = self.dataloader.load_pairs(directory)
+        self.pairs = self.dataloader.load_data()
         return self
 
     def generate_name(self):
@@ -180,14 +180,14 @@ class ModelScenarioManager:
                 )
         return self
 
-    def get_potential_candidates(self, parent_run_id: str, num: int):
+    def get_potential_candidates(self, parent_run_id: str, experiment_id: int):
         '''
         Based on the run, choose number of candidate that came as top.
         '''
         client = mlflow.tracking.MlflowClient()
         # Search for child runs with the parent run ID
         child_runs = client.search_runs(
-            experiment_ids=[1],
+            experiment_ids=[experiment_id],
             filter_string=f"tags.mlflow.parentRunId = '{parent_run_id}'",
             order_by=[f"metrics.{Stage.mse_metrics(Stage.VALID)}"]
         )
@@ -195,33 +195,46 @@ class ModelScenarioManager:
             client.set_tag(cr.info.run_id, "level", "test")
         return self
 
-    def test_runs(self, parent_run_id: str):
+    def compose_filter_string(self, ddict):
+        final = []
+        for key, value in ddict.items():
+            final.append(f"tags.{key} = '{value}'")
+        return final.join(" AND ")
+
+    def test_runs(self, parent_run_id: str, experiment_id: int):
         client = mlflow.tracking.MlflowClient()
         # Search for child runs with the parent run ID
+        filter_string = self.compose_filter_string({
+            "mlflow.parentRunId": parent_run_id, 
+            "tags.level": "test", 
+            "tags.purpose": "model"
+        })
         child_runs = client.search_runs(
-            experiment_ids=[1],
-            filter_string=f"tags.mlflow.parentRunId = '{parent_run_id}' and tags.level = 'test'",
+            experiment_ids=[experiment_id],
+            filter_string=f"tags.mlflow.parentRunId = '{parent_run_id}' and tags.level = 'test' and tags.purpose = 'model'" ,
         )
+        print(child_runs)
         for cr in child_runs:
-            mod = self.load_model(cr)
+            mod = self.load_model(cr, experiment_id=experiment_id)
             self.check_mse_against(mod, Stage.TEST)
         return self
 
-    def load_model(self, run):
+    def load_model(self, run, experiment_id: int):
         client = mlflow.tracking.MlflowClient()
         run = client.get_run(run.info.run_id)
-        uri = f"mlflow-artifacts:/1/{run.info.run_id}/artifacts/model/model.pkl"
+        uri = f"mlflow-artifacts:/{experiment_id}/{run.info.run_id}/artifacts/model/model.pkl"
         dest = "/tmp/mlflow/artifacts"
+        print(f"downloading model from {uri} to {dest}")
         mlflow.artifacts.download_artifacts(artifact_uri=uri, dst_path=dest)
         with open(f"{dest}/model.pkl", 'rb') as f:
             model = pickle.load(f)
             return model
 
-    def tag_champion(self, parent_run_id: str):
+    def tag_champion(self, parent_run_id: str, experiment_id: int):
         client = mlflow.tracking.MlflowClient()
         # Search for child runs with the parent run ID
         child_runs = client.search_runs(
-            experiment_ids=[1],
+            experiment_ids=[experiment_id],
             filter_string=f"tags.mlflow.parentRunId = '{parent_run_id}' AND tags.level = 'test'",
             order_by=[f"metrics.{Stage.mse_metrics(Stage.TEST)}"]
         )

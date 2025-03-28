@@ -43,25 +43,26 @@ class Disk:
         self.saver = saver
         return self
     
-    def save_data(self):
+    def save_data(self, data):
         if self.saver is None:
             raise ValueError("should define the saving method first")
-        self.saver(self.raw_data)
+        self.saver(data)
     
     def save_pair_via_parquet(self):
-        def saver(pairs: Pairs):
+        def saver(pairs):
+            if not isinstance(pairs, Pairs):
+                raise TypeError("Input data must be of type Pairs")
             base = f"{self.path}/{self.name}"
-            (self.save_parquet_data(pairs.train.X, f"{base}/train/feature.parquet")
-                .save_parquet_data(pairs.train.y.to_frame(), f"{base}/train/target.parquet")
-                .save_parquet_data(pairs.valid.X, f"{base}/valid/feature.parquet")
-                .save_parquet_data(pairs.valid.y.to_frame(), f"{base}/valid/target.parquet")
-                .save_parquet_data(pairs.test.X, f"{base}/test/feature.parquet")
-                .save_parquet_data(pairs.test.y.to_frame(), f"{base}/test/target.parquet"))
+            (self._save_parquet_data(pairs.train.X, f"{base}/train/feature.parquet")
+                ._save_parquet_data(pairs.train.y.to_frame(), f"{base}/train/target.parquet")
+                ._save_parquet_data(pairs.valid.X, f"{base}/valid/feature.parquet")
+                ._save_parquet_data(pairs.valid.y.to_frame(), f"{base}/valid/target.parquet")
+                ._save_parquet_data(pairs.test.X, f"{base}/test/feature.parquet")
+                ._save_parquet_data(pairs.test.y.to_frame(), f"{base}/test/target.parquet"))
         self.saver = saver
         return self
 
-    def _save_parquet_data(self, df: pd.DataFrame, output: str):
-        path = f'dataset/{output}'
+    def _save_parquet_data(self, df: pd.DataFrame, path: str):
         dir = "/".join(path.split("/")[:-1])
         if not os.path.exists(dir):
             os.makedirs(dir)

@@ -48,7 +48,7 @@ create-server-container:
 
 # run test units
 test:
-	pytest --ignore=pgdata -vv
+	pytest -x --disable-warnings --ignore=pgdata -vv 
 
 # run designated train
 train:

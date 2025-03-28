@@ -83,9 +83,9 @@ def singular_train():
     This is the base train function. It is used to train a single model.
     It only use shipment weight as a feature. Use this function to verify the training process.
     '''
-    experiment_name = "humamtest"
+    experiment_name = "humamtest_lazycall"
 
-    # In this scenarion, preprocess need to read csv data from disk
+    # In this scenario, preprocess need to read csv data from disk
     # and save preprocessed file in a form of parquet file
     data_loader_preprocess = (data_io.Disk(DATASET_PATH, "cfs_2017")
         .load_dataframe_via_csv(CommodityFlow, {"nrows": 200_000})
@@ -99,11 +99,12 @@ def singular_train():
         add_log_transformation(CommodityFlow.SHIPMENT_VALUE, data_transform.TransformationMethods.REPLACE).
         add_min_max_transformation(CommodityFlow.SHIPMENT_WEIGHT, data_transform.TransformationMethods.REPLACE))
     generated_run_name = generate_random_string(6)
-    experiment_name = "humamtest_lazycall"
     mlflow.set_tracking_uri(uri=TRACKER_PATH)
     mlflow.set_experiment(experiment_name)
-    with mlflow.start_run(run_name=generated_run_name) as parent_run_id:
-        run_name = (PreprocessScenarioManager()
+    experiment_id = mlflow.get_experiment_by_name(experiment_name).experiment_id
+    with mlflow.start_run(run_name=generated_run_name):
+        run_id = mlflow.active_run().info.run_id
+        (PreprocessScenarioManager()
             .set_tracking(TRACKER_PATH, experiment_name)
             .set_dataloader(data_loader_preprocess)
             .set_datacleaner(data_cleaner_lc)
@@ -111,14 +112,14 @@ def singular_train():
             .preprocess()
             .get_run_name())
         (ModelScenarioManager()
-            .set_tracking
+            .set_tracking(TRACKER_PATH, experiment_name)
             .set_dataloader(data_loader_train)
-            .load_data(run_name)
+            .load_data()
             .add_model(LinearRegression())
             .train()
-            .get_potential_candidates(parent_run_id, 1)
-            .test_runs(parent_run_id)
-            .tag_champion(parent_run_id))
+            .get_potential_candidates(run_id, experiment_id)
+            .test_runs(run_id, experiment_id)
+            .tag_champion(run_id, experiment_id))
     return
 
 
