@@ -153,7 +153,6 @@ class TestDataTransformLazyCall:
         dtlc.add_min_max_transformation(SampleEnum.COLUMN_NUMERICAL, TransformationMethods.REPLACE)
         pairs = dtlc.transform_data(df)
         assert pairs.train.X.loc[0][SampleEnum.COLUMN_NUMERICAL] == 0
-        pass
 
     def test_add_one_hot_encoding_transformation(self, df):
         dtlc = DataTransformLazyCall(TRACKING_PATH, EXPERIMENT_NAME, SampleEnum)

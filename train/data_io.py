@@ -14,12 +14,17 @@ class Disk:
         self.loader: Optional[function] = None
         self.saver: Optional[function] = None
 
+    def set_tracking(self, path, name):
+        self.tracking_path = path
+        self.experiment_name = name
+        return self
+
     def load_dataframe_via_csv(self, column: TabularColumn, load_options: dict):
         def loader() -> pd.DataFrame:
             raw_data = pd.read_csv(f"{self.path}/{self.name}.csv", **load_options)
-            raw_data = self._replace_columns(raw_data, column)
             defined = mlflow.data.from_pandas(raw_data, name=self.name)
             mlflow.log_input(defined)
+            raw_data = self._replace_columns(raw_data, column)
             return copy(raw_data)
         self.loader = loader
         return self
@@ -87,7 +92,7 @@ class Disk:
     def _replace_columns(data: pd.DataFrame, enum: TabularColumn):
         Disk._check_length(data, enum)
         # it has minus one because index in python began with 0
-        replace_map = {data.columns[e.value-1]:e.name for e in enum}
+        replace_map = {data.columns[e.value-1]:e for e in enum}
         data.rename(columns=replace_map, inplace=True)
         return data
 

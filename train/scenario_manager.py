@@ -4,7 +4,7 @@ from mlflow.models import infer_signature
 import time
 import random
 import pickle
-from train.data_io import TabularDataLoader
+from train.data_io import Disk
 from train.data_cleaner import TabularDataCleaner
 from train.data_transform import TabularDataTransform
 from train.dataset import TrackingDataset
@@ -18,7 +18,7 @@ from sklearn.metrics import mean_squared_error
 # desired scenario
 class PreprocessScenarioManager:
     def __init__(self):
-        self.dataloader: Optional[TabularDataLoader] = None
+        self.dataloader: Optional[Disk] = None
         self.datacleaner: Optional[TabularDataCleaner] = None
         self.datatransform: Optional[TabularDataTransform] = None
         self.experiment_name: Optional[str] = None
@@ -26,12 +26,11 @@ class PreprocessScenarioManager:
         return
     
     # GETTER & SETTER
-    def set_dataloader(self, dl: TabularDataLoader):
+    def set_dataloader(self, dl: Disk):
         if self.experiment_name is None:
             raise ValueError("need to set experiment name")
         self.dataloader = dl
-        self.dataloader.set_tracking_path(self.tracking_path)
-        self.dataloader.set_experiment(self.experiment_name)
+        self.dataloader.set_tracking(self.tracking_path, self.experiment_name)
         return self
 
     def set_datacleaner(self, dc: TabularDataCleaner):
@@ -104,18 +103,18 @@ class PreprocessScenarioManager:
             })
             mlflow.set_tag("purpose", "preprocess")
             mlflow.log_metric("duration", time.time() - start)
-            self.dataloader.save_pairs(run_name, pairs)
+            self.dataloader.save_data()
             self.run_name = run_name
         return self
 
 class ModelScenarioManager:
     def __init__(self):
-        self.dataloader: Optional[TabularDataLoader] = None
+        self.dataloader: Optional[Disk] = None
         self.pairs: Optional[Pairs] = None
         self.model_list = []
         return
 
-    def set_dataloader(self, dataloader: TabularDataLoader):
+    def set_dataloader(self, dataloader: Disk):
         self.dataloader = dataloader
         return self
 
@@ -239,7 +238,7 @@ class ModelScenarioManager:
 # deprecated; should either use PreprocessScenarioManager or ModelScenarioManager
 class ScenarioManager:
     def __init__(self):
-        self.dataloader: Optional[TabularDataLoader] = None
+        self.dataloader: Optional[Disk] = None
         self.datacleaner: Optional[TabularDataCleaner] = None
         self.datatransform: Optional[TabularDataTransform] = None
         self.model: Optional[TabularModel] = None
@@ -250,7 +249,7 @@ class ScenarioManager:
         self.run_name = name
         return self
 
-    def set_dataloader(self, dataloader: TabularDataLoader):
+    def set_dataloader(self, dataloader:Disk):
         self.dataloader = dataloader
         return self
 

@@ -8,6 +8,18 @@ class Stage(Enum):
     TEST = 3
 
     @classmethod
+    def _map(cls):
+        return {
+            "train": cls.TRAIN,
+            "test": cls.TEST,
+            "valid": cls.VALID,
+        }
+
+    @staticmethod
+    def from_str(name: str):
+        return Stage._map()[name]
+
+    @classmethod
     def from_enum(cls, name: str):
         return {
             "train": cls.TRAIN,

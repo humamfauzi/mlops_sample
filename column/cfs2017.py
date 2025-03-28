@@ -73,6 +73,7 @@ class CommodityFlow(Enum):
             cls.SHIPMENT_DISTANCE_CIRCLE,
             cls.SHIPMENT_DISTANCE_ROUTE,
             cls.WEIGHT_FACTOR,
+            cls.SHIPMENT_VALUE,
         ]
 
     @classmethod

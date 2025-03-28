@@ -30,6 +30,7 @@ class DataFrameLazyCall(TabularDataCleaner):
     
     def clean_data(self, df: pd.DataFrame) -> pd.DataFrame:
         self.cleaned_data = df.copy()
+        print(self.cleaned_data)
         for call in self.call_container:
             call()
         return copy(self.cleaned_data)
@@ -40,6 +41,7 @@ class DataFrameLazyCall(TabularDataCleaner):
 
     def filter_columns(self, columns):
         def filter_columns():
+            print("filtering columns", columns, self.cleaned_data.columns)
             self.cleaned_data = self.cleaned_data[columns]
         self.call_container.append(filter_columns)
         return self

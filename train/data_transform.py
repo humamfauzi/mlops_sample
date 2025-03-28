@@ -8,7 +8,6 @@ from abc import ABC, abstractmethod
 from sklearn.preprocessing import OneHotEncoder, MinMaxScaler
 from sklearn.model_selection import train_test_split
 
-from column.cfs2017 import CommodityFlow
 from column.abc import TabularColumn
 
 from train.sstruct import Pairs, Stage, FeatureTargetPair
@@ -75,17 +74,16 @@ class DataTransformLazyCall(TabularDataTransform):
         transformation_name = "log"
         if column not in self.column:
             raise ValueError(f"column {column} not exist")
+        print("column", column)
+        print("numerical", self.column.numerical())
         if column not in self.column.numerical():
             raise ValueError(f"column {column} is not numerical")
-        if column not in self.transformation.keys():
-            self.transformation[column] = {} 
         pw = ProcessWrapper(np.log, np.exp)
         keeper = Keeper(
-            name="log",
+            name=transformation_name,
             column= column, 
             function= pw, 
-            methods= methods
-            )
+            methods= methods)
         self.keeper_array.append(keeper)
         def save():
             base_dir = "artifacts/process"
@@ -107,7 +105,7 @@ class DataTransformLazyCall(TabularDataTransform):
         if column not in self.transformation.keys():
             self.transformation[column] = {}
         keeper = Keeper(
-            name="min_max",
+            name=transformation_name,
             column= column, 
             function= MinMaxScaler(), 
             methods= methods
@@ -133,7 +131,7 @@ class DataTransformLazyCall(TabularDataTransform):
             self.transformation[column] = {}
         ohe = OneHotEncoder(sparse_output=False, handle_unknown='infrequent_if_exist')
         keeper = Keeper(
-            name="one_hot_encoding",
+            name=transformation_name,
             column= column, 
             function= ohe, 
             methods= TransformationMethods.APPEND_AND_REMOVE
@@ -245,6 +243,7 @@ class DataTransformLazyCall(TabularDataTransform):
 
         train_cols = self.column.feature(self.transformed_data.columns)
         train = self.transformed_data[train_cols]
+        print(">>>>>>>>>>>>>>", self.transformed_data.columns)
         test = self.transformed_data[self.column.target()]
         Xtr, Xt, ytr, yt = train_test_split(
                 train,
