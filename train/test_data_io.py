@@ -80,9 +80,8 @@ class TestDisk:
         })
         
         disk = Disk(FOLDER, output)
-        disk.raw_data = sample_data
         disk.save_via_csv()
-        disk.save_data()
+        disk.save_data(sample_data)
         
         assert os.path.exists(output_path)
         loaded_data = pd.read_csv(output_path)
