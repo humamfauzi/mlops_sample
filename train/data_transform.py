@@ -12,6 +12,7 @@ from column.abc import TabularColumn
 
 from train.sstruct import Pairs, Stage, FeatureTargetPair
 from train.wrapper import ProcessWrapper
+from repositories.mlflow import MLflowRepository
 from dataclasses import dataclass, field
 from typing import Optional
 from enum import Enum
@@ -38,9 +39,8 @@ class Keeper:
     function: any
     methods: TransformationMethods
 
-# TODO find out if we make this class generics for column level
 class DataTransformLazyCall(TabularDataTransform):
-    def __init__(self, tracking_path, experiment_name, column: TabularColumn):
+    def __init__(self, column: TabularColumn, repository: MLflowRepository):
         self.train_pair:  Optional[FeatureTargetPair] = None
         self.valid_pair:  Optional[FeatureTargetPair] = None
         self.test_pair:  Optional[FeatureTargetPair] = None
@@ -48,18 +48,9 @@ class DataTransformLazyCall(TabularDataTransform):
 
         self.transformed_data: Optional[pd.DataFrame] = None
         self.save_function_container = []
-        # TODO probably needs its own dataclass 
-        self.transformation = {
-            # columns: {
-            #     #    "transformation_name": transformation_function
-            #     # }
-            # },
-        }
         self.keeper_array = []
         # TODO Maybe we should split tracker and data transformation
-        self.tracking_path = tracking_path
-        self.experiment_name = experiment_name
-
+        self.repository = repository
         self.transformation_save_function_container = []
     
     def get_pairs(self) -> Pairs:
@@ -100,8 +91,6 @@ class DataTransformLazyCall(TabularDataTransform):
             raise ValueError(f"column {column} not exist")
         if column not in self.column.numerical():
             raise ValueError(f"column {column} is not numerical")
-        if column not in self.transformation.keys():
-            self.transformation[column] = {}
         keeper = Keeper(
             name=transformation_name,
             column= column, 
@@ -125,8 +114,6 @@ class DataTransformLazyCall(TabularDataTransform):
             raise ValueError(f"column {column} not exist")
         if column not in self.column.categorical():
             raise ValueError(f"column {column} is not categorical")
-        if column not in self.transformation.keys():
-            self.transformation[column] = {}
         ohe = OneHotEncoder(sparse_output=False, handle_unknown='infrequent_if_exist')
         keeper = Keeper(
             name=transformation_name,
@@ -274,10 +261,9 @@ class DataTransformLazyCall(TabularDataTransform):
         return self
 
     def _save_transformation(self):
-        dir = "artifacts/process"
         for save_fn in self.transformation_save_function_container:
             save_fn()
-        mlflow.log_artifacts(dir, artifact_path="preprocess")
+        self.repository.save_folder(path="preprocess")
         return self
 
 

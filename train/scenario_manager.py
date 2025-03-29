@@ -1,5 +1,6 @@
 import mlflow
 from mlflow.models import infer_signature
+import os
 
 import time
 import random
@@ -11,6 +12,7 @@ from train.dataset import TrackingDataset
 from train.model import TabularModel
 from typing import Optional
 from train.sstruct import FeatureTargetPair, Pairs, Stage
+from repositories.mlflow import MLflowRepository
 from sklearn.metrics import mean_squared_error
 
 # all run initiate here
@@ -21,16 +23,17 @@ class PreprocessScenarioManager:
         self.dataloader: Optional[Disk] = None
         self.datacleaner: Optional[TabularDataCleaner] = None
         self.datatransform: Optional[TabularDataTransform] = None
+        self.repository: Optional[MLflowRepository] = None
         self.experiment_name: Optional[str] = None
-        self.run_name =  ""
         return
     
     # GETTER & SETTER
     def set_dataloader(self, dl: Disk):
-        if self.experiment_name is None:
-            raise ValueError("need to set experiment name")
         self.dataloader = dl
-        self.dataloader.set_tracking(self.tracking_path, self.experiment_name)
+        return self
+
+    def set_repository(self, repository: MLflowRepository):
+        self.repository = repository
         return self
 
     def set_datacleaner(self, dc: TabularDataCleaner):
@@ -107,12 +110,20 @@ class PreprocessScenarioManager:
             self.run_name = run_name
         return self
 
+    def _save_manifest(self, path):
+        pass
+
 class ModelScenarioManager:
     def __init__(self):
         self.dataloader: Optional[Disk] = None
+        self.repository: Optional[MLflowRepository] = None
         self.pairs: Optional[Pairs] = None
         self.model_list = []
         return
+
+    def set_repository(self, repository: MLflowRepository):
+        self.repository = repository
+        return self
 
     def set_dataloader(self, dataloader: Disk):
         self.dataloader = dataloader
@@ -171,75 +182,71 @@ class ModelScenarioManager:
                 mlflow.set_tag("level", "candidate")
                 self.check_mse_against(mod, Stage.TRAIN)
                 self.check_mse_against(mod, Stage.VALID)
-                mlflow.sklearn.log_model(
-                    sk_model=mod,
-                    artifact_path="model",
-                    signature=infer_signature(ftp.x_array(), mod.predict(ftp.x_array())),
-                    input_example=ftp.x_array()[:5],
-                    registered_model_name=f"{run_name}/{model_name}",
-                )
+                self._save_processing_as_blob("artifacts/models", model_name, mod)
+        self._save_models()
         return self
 
-    def get_potential_candidates(self, parent_run_id: str, experiment_id: int):
+    def _save_models(self):
+        run = mlflow.active_run()
+        dirr = "artifacts/models"
+        client = mlflow.tracking.MlflowClient()
+        child_run = client.get_run(run.info.run_id)
+        parent_run_id = child_run.data.tags.get("mlflow.parentRunId")
+        mlflow.log_artifacts(run_id=parent_run_id, local_dir=dirr, artifact_path="models")
+        return self
+
+    def _save_processing_as_blob(self, directory, model_name, model_object):
+        os.makedirs(f'{directory}' , exist_ok=True)
+        path = f'{directory}/{model_name}.pkl'
+        with open(path, 'wb') as f:
+            pickle.dump(model_object, f)
+        return path
+
+    def get_potential_candidates(self):
         '''
         Based on the run, choose number of candidate that came as top.
         '''
-        client = mlflow.tracking.MlflowClient()
-        # Search for child runs with the parent run ID
-        child_runs = client.search_runs(
-            experiment_ids=[experiment_id],
-            filter_string=f"tags.mlflow.parentRunId = '{parent_run_id}'",
-            order_by=[f"metrics.{Stage.mse_metrics(Stage.VALID)}"]
-        )
-        for cr in child_runs[:3]:
-            client.set_tag(cr.info.run_id, "level", "test")
+        child_runs = self.repository.find_child_runs(filt={"purpose": "model"}, order_by=f"metrics.{Stage.mse_metrics(Stage.VALID)}")
+        if len(child_runs) == 0:
+            raise ValueError("No child runs found for potential candidates")
+        first = child_runs.iloc[0] 
+        self.repository.set_tag(first["run_id"], "level", "test")
         return self
 
     def compose_filter_string(self, ddict):
         final = []
         for key, value in ddict.items():
             final.append(f"tags.{key} = '{value}'")
-        return final.join(" AND ")
+        return " AND ".join(final)
 
-    def test_runs(self, parent_run_id: str, experiment_id: int):
-        client = mlflow.tracking.MlflowClient()
-        # Search for child runs with the parent run ID
-        filter_string = self.compose_filter_string({
-            "mlflow.parentRunId": parent_run_id, 
-            "tags.level": "test", 
-            "tags.purpose": "model"
-        })
-        child_runs = client.search_runs(
-            experiment_ids=[experiment_id],
-            filter_string=f"tags.mlflow.parentRunId = '{parent_run_id}' and tags.level = 'test' and tags.purpose = 'model'" ,
-        )
-        print(child_runs)
-        for cr in child_runs:
-            mod = self.load_model(cr, experiment_id=experiment_id)
-            self.check_mse_against(mod, Stage.TEST)
+    def test_runs(self):
+        child_runs = self.repository.find_child_runs(filt={"level": "test"}, order_by="created")
+        if len(child_runs) == 0:
+            raise ValueError("No child runs found for test runs")
+        first = child_runs.iloc[0] 
+        mod = self.load_model(first["tags.mlflow.runName"])
+        self.check_mse_against(mod, Stage.TEST)
         return self
 
-    def load_model(self, run, experiment_id: int):
+    # TODO : Create a manifest in the parent run so it can read the manifest
+    # and load the model. Manifest should contain all the model name and the
+    # path to the model
+    def load_model(self, child_run_name: str):
+        model_path = self.repository.compose_model_path(child_run_name=child_run_name)
+        return self.repository.load_model(model_path)
+    
+    def _create_manifest(self, parent_run_id: str):
+        path = "artifacts/model_manifest.json"
         client = mlflow.tracking.MlflowClient()
-        run = client.get_run(run.info.run_id)
-        uri = f"mlflow-artifacts:/{experiment_id}/{run.info.run_id}/artifacts/model/model.pkl"
-        dest = "/tmp/mlflow/artifacts"
-        print(f"downloading model from {uri} to {dest}")
-        mlflow.artifacts.download_artifacts(artifact_uri=uri, dst_path=dest)
-        with open(f"{dest}/model.pkl", 'rb') as f:
-            model = pickle.load(f)
-            return model
+        client.log_artifact(run_id=parent_run_id, local_path=path)
 
-    def tag_champion(self, parent_run_id: str, experiment_id: int):
-        client = mlflow.tracking.MlflowClient()
-        # Search for child runs with the parent run ID
-        child_runs = client.search_runs(
-            experiment_ids=[experiment_id],
-            filter_string=f"tags.mlflow.parentRunId = '{parent_run_id}' AND tags.level = 'test'",
-            order_by=[f"metrics.{Stage.mse_metrics(Stage.TEST)}"]
+    def tag_champion(self):
+        child_runs = self.repository.find_child_runs(
+            order_by=f"metrics.{Stage.mse_metrics(Stage.TEST)}",
+            filt={"level": "test"}
         )
         best = child_runs[0]
-        client.set_tag(best.info.run_id, "level", "champion")
+        self.repository.set_tag(best.info.run_id, "level", "champion")
         return self
 
     def check_mse_against(self, mod, stage: Stage):

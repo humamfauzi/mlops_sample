@@ -9,20 +9,27 @@ import pickle
 import time
 import os
 import json
+from enum import Enum
+
+class MetadataKey(Enum):
+    MODEL_NAME = "model_name"
+    TRAIN_ACCURACY = "train_accuracy"
+    TEST_ACCURACY = "test_accuracy"
+    METRICS = "metrics"
+    TRAINED_ROWS = "trained_rows"
+    TRAIN_TIME = "train_time"
+    ALGORITHM = "algorithm"
 
 @dataclass
 class Metadata:
     """Metadata item for the model metadata response"""
-    key: str
+    key: MetadataKey    
     display: str
     value: Any
     
-    def to_dict(self) -> Dict[str, Any]:
-        return {
-            "key": self.key,
-            "display": self.display,
-            "value": self.value
-        }
+    def to_dict(self) -> Dict[MetadataKey, Any]:
+        return { "key": self.key, "display": self.display, "value": self.value }
+
 
 @dataclass
 class InputBase:
@@ -35,7 +42,6 @@ class CategoricalInput(InputBase):
     """Categorical input item for the model metadata response"""
     type: str = "categorical"
     enumeration: List[str] = field(default_factory=list)
-    
     def to_dict(self) -> Dict[str, Any]:
         return {
             "type": self.type,
@@ -43,6 +49,7 @@ class CategoricalInput(InputBase):
             "display": self.display,
             "enumeration": self.enumeration
         }
+
 
 @dataclass
 class NumericalInput(InputBase):
@@ -221,15 +228,16 @@ class Model:
                         container[i] = value
         return [container, ""]
 
+class Sample:
+    def __init__(self): pass
 class ModelRepository:
     def __init__(self, tracker: str, experiment: str):
         self.models = []
         self.tracker = tracker
-        self.experiment = experiment
+        self.experiment_name = experiment
         mlflow.set_tracking_uri(uri=self.tracking_url)
-        mlflow.set_experiment(self.experiment)
+        mlflow.set_experiment(self.experiment_name)
         # TODO would change later
-        self.experiment_id = 1
         self.client = MlflowClient()
 
     def get(self) -> List[str]:
@@ -240,12 +248,10 @@ class ModelRepository:
         return model.information
 
     def load(self) -> "ModelRepository":
-        runs = self.client.search_runs(
-            experiment_ids=[self.experiment_id],
-            filter_string="tags.production = 'true'",
-        )
+        runs = self.client.search_runs( experiment_ids=[self.experiment_id], filter_string="tags.production = 'true'",)
+        experiment_id = mlflow.get_experiment_by_name(self.experiment).experiment_id
         for run in runs:
-            uri = f"mlflow-artifacts:/{self.experiment_id}/{run.info.run_id}/artifacts"
+            uri = f"mlflow-artifacts:/{experiment_id}/{run.info.run_id}/artifacts"
             destination_path = "artifacts/{run.info.run_id}"
             mlflow.artifacts.download_artifacts(artifact_uri=uri, dst_path=destination_path)
             model = (Model(run.info.run_id)

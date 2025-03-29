@@ -6,18 +6,16 @@ from copy import copy
 from typing import Optional
 from train.sstruct import Pairs, Stage, FeatureTargetPair
 from train.column import TabularColumn
+from repositories.mlflow import MLflowRepository
 from enum import Enum
+
 class Disk:
-    def __init__(self, path, name: str):
+    def __init__(self, path, name: str, repository: MLflowRepository = None):
         self.path = path
         self.name = name
         self.loader: Optional[function] = None
         self.saver: Optional[function] = None
-
-    def set_tracking(self, path, name):
-        self.tracking_path = path
-        self.experiment_name = name
-        return self
+        self.repository: Optional[MLflowRepository] = repository
 
     def load_dataframe_via_csv(self, column: TabularColumn, load_options: dict):
         def loader() -> pd.DataFrame:

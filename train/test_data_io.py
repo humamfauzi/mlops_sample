@@ -31,18 +31,18 @@ def sample_csv_path():
 
 @pytest.mark.filterwarnings("ignore")
 class TestDisk:
-    """Test suite for the Disk class functionality."""
+    """Test suite for disk-based data I/O operations using the Disk class."""
 
     @pytest.mark.filterwarnings("ignore::UserWarning")
     def test_initialization(self):
-        """Test proper initialization of Disk class."""
+        """Test Disk class initialization with folder path and filename."""
         disk = Disk(FOLDER, FILENAME)
         assert disk.path == FOLDER 
         assert disk.name == FILENAME
 
     @pytest.mark.filterwarnings("ignore::UserWarning")
     def test_load_dataframe_via_csv(self, sample_csv_path):
-        """Test loading data from CSV file."""
+        """Test loading CSV file into DataFrame with column name mapping using Enums."""
         disk = Disk(FOLDER, FILENAME)
         disk.load_dataframe_via_csv(SampleEnum, {})
         df = disk.load_data()
@@ -55,7 +55,7 @@ class TestDisk:
         assert df.iloc[0, 2] == 300
 
     def test_replace_columns(self):
-        """Test column replacement functionality using Enum mapping."""
+        """Test DataFrame column replacement using Enum mapping to standardize column names."""
         sample_dict = {
             "id": [1, 2, 3],
             "ffaster": ["asd", "asd", "bds"],
@@ -70,7 +70,7 @@ class TestDisk:
         assert disk.raw_data.columns[2] == SampleEnum.COLUMN_TARGET
 
     def test_save_data_via_csv(self):
-        """Test saving DataFrame to CSV."""
+        """Test saving DataFrame to CSV file and verify the saved file contents."""
         output = "output"
         output_path = os.path.join(FOLDER, f"{output}.csv")
         sample_data = pd.DataFrame({

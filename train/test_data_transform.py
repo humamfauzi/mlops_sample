@@ -6,6 +6,7 @@ import os
 
 from enum import Enum
 from train.data_transform import DataTransform, DataTransformLazyCall, TransformationMethods
+from repositories.dummy import DummyMLflowRepository
 from train.sstruct import Stage, FeatureTargetPair
 
 
@@ -45,6 +46,10 @@ def df():
     df = pd.DataFrame(ddict)
     df.set_index(SampleEnum.COLUMN_ID, inplace=True)
     return df
+
+@pytest.fixture(scope='function')
+def dummy():
+    return DummyMLflowRepository(TRACKING_PATH, EXPERIMENT_NAME)
 
 class TestDataTransform:
     # TODO there are several warning beacause data frame copy,
@@ -139,8 +144,8 @@ class TestDataTransform:
         assert dt.test_pair.X.shape == (1, 3)
 
 class TestDataTransformLazyCall:
-    def test_log_transformation(self, df):
-        dtlc = DataTransformLazyCall(TRACKING_PATH, EXPERIMENT_NAME, SampleEnum)
+    def test_log_transformation(self, df, dummy):
+        dtlc = DataTransformLazyCall(SampleEnum, dummy)
         dtlc.add_log_transformation(SampleEnum.COLUMN_NUMERICAL, TransformationMethods.REPLACE)
         pairs = dtlc.transform_data(df)
         # pick one sample
@@ -148,14 +153,14 @@ class TestDataTransformLazyCall:
         index, num_val = row.name, row[SampleEnum.COLUMN_NUMERICAL]
         assert num_val == np.log(df.loc[index][SampleEnum.COLUMN_NUMERICAL])
 
-    def test_min_max_transformation(self, df):
-        dtlc = DataTransformLazyCall(TRACKING_PATH, EXPERIMENT_NAME, SampleEnum)
+    def test_min_max_transformation(self, df, dummy):
+        dtlc = DataTransformLazyCall(SampleEnum, dummy)
         dtlc.add_min_max_transformation(SampleEnum.COLUMN_NUMERICAL, TransformationMethods.REPLACE)
         pairs = dtlc.transform_data(df)
         assert pairs.train.X.loc[0][SampleEnum.COLUMN_NUMERICAL] == 0
 
-    def test_add_one_hot_encoding_transformation(self, df):
-        dtlc = DataTransformLazyCall(TRACKING_PATH, EXPERIMENT_NAME, SampleEnum)
+    def test_add_one_hot_encoding_transformation(self, df, dummy):
+        dtlc = DataTransformLazyCall(SampleEnum, dummy)
         dtlc.add_one_hot_encoding_transformation(SampleEnum.COLUMN_CATEGORICAL)
         pairs = dtlc.transform_data(df)
         assert pairs.train.X.shape == (8, 3)

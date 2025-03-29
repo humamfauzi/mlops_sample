@@ -39,7 +39,7 @@ CFS2017_MODEL_REPOSITORY = None
 @app.on_event("startup")
 async def startup_event():
     global CFS2017_MODEL_REPOSITORY
-    CFS2017_MODEL_REPOSITORY = ModelRepository(TRACKER_PATH, "humamtest").load()
+    CFS2017_MODEL_REPOSITORY = ModelRepository(TRACKER_PATH, "humamtest_lazycall").load()
 
 # check the connection for the server
 @app.get("/health")
