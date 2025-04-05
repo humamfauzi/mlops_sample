@@ -2,7 +2,7 @@
 from dataclasses import dataclass, field
 from typing import List, Any, Dict, Union
 from datetime import timedelta
-from repositories.mlflow import Repository
+from repositories.mlflow import Repository, Manifest, InputItem, MetadataItem
 import numpy as np
 import pickle
 import time
@@ -297,19 +297,103 @@ def generate_input_from_json(input: Dict[str, Any]) -> List[Input]:
             ))
     return result
 
+@dataclass
+class Metadata:
+    Description: str
+    Transformation: List[InputItem]
+    Model: List[MetadataItem]
 
+@dataclass
+class ModelData:
+    model: callable 
+    model_manifest: List[MetadataItem]
+    transformation: Dict[str, Any]
+    transformation_manifest: List[InputItem]
+
+    def _to_metadata_dict(self) -> Dict[str, Any]:
+        return {
+            "description": self._find_metadata("description").value,
+            "input": [tm.to_dict() for tm in self.transformation_manifest],
+            "metadata": [mm.to_dict() for mm in self.model_manifest],
+        }
+
+    def _find_metadata(self, key: str) -> MetadataItem:
+        print(f"Finding metadata for key: {self.model_manifest}")
+        for item in self.model_manifest:
+            if item.key == key:
+                return item
+        return MetadataItem()
+
+    def get_model_name(self) -> str:
+        name = self._find_metadata("model_name")
+        return name.value
+
+    def get_short_description(self) -> ShortDescription:
+        name = self._find_metadata("model_name")
+        return ShortDescription(name=name.value, display="")
+
+    def get_metadata(self) -> Dict[str, Any]:
+        return self._to_metadata_dict()
+
+    def _transform(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        transformed_data = {}
+        for key, value in data.items():
+            if key not in self.transformation:
+                transformed_data[key] = value; continue
+            for transform_func in self.transformation[key]:
+                value = transform_func.transform(value)
+            transformed_data[key] = value
+        return transformed_data
+
+    def infer(self, data: Dict[str, Any]) -> Output:
+        start_time = time.time()
+        filtered_data = {key: value for key, value in data.items() if key in self._get_all_inputs()}
+        transformed_data = self._transform(filtered_data)
+        result = self.model.predict(transformed_data)
+        elapsed_time = time.time() - start_time
+        return [result, elapsed_time]
+
+    def _get_all_inputs(self) -> List[str]:
+        return [tm.key for tm in self.transformation_manifest]
+    
 class ModelServer:
     def __init__(self, repository: Repository):
         self.repository = repository
+        self.available_models: List[ModelData] = []
 
-    def load(self) -> "ModelServer":
+    def load(self) -> "ModelData":
         parent_runs = self.repository.get_all_available_runs()
         for run in parent_runs:
-            self.repository.load_run(run)
+            [models, model_manifests] = self.repository.load_all_models(run)
+            [transformation, transformation_manifest] = self.repository.load_transformations(run)
+            for model, model_manifest in zip(models, model_manifests):
+                self.available_models.append(ModelData(
+                    model=model,
+                    model_manifest=Manifest.read_model_manifest(model_manifest),
+                    transformation=transformation,
+                    transformation_manifest=Manifest.read_transformation_manifest(transformation_manifest),
+                ))
         return self
 
-    def list() -> List[str]: return []
+    def list(self) -> List[ShortDescription]:
+        return [ am.get_short_description() for am in self.available_models]
 
-    def metadata(self, model_name: str) -> TabularModel: pass
+    def _find_model(self, model_name: str) -> ModelData:
+        for model in self.available_models:
+            if model.get_model_name() == model_name:
+                return model
+        return ModelData()
 
-    def infer(self, model_name: str, data: Dict[str, Any]) -> Output: pass
+    def metadata(self, model_name: str) -> TabularModel:
+        model = self._find_model(model_name)
+        if model is None:
+            return None
+        return model.get_metadata()
+
+    def infer(self, model_name: str, data: Dict[str, Any]) -> Output:
+        model =  self._find_model(model_name)
+        if model is None:
+            return None
+        return model.infer(data)
+
+    

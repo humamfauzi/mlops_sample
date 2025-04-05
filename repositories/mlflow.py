@@ -100,7 +100,6 @@ class Artifact:
         os.makedirs(os.path.dirname(local_path), exist_ok=True)
         with open(local_path, 'wb') as f:
             pickle.dump(func, f)
-        print(f"parent run {parent_run_id}")
         self.client.log_artifact(parent_run_id, local_path, artifact_uri)
         return
 
@@ -119,6 +118,32 @@ class Artifact:
             func = pickle.load(f)
             return func
 
+    def load_all_transformations(self, parent_run_id: str):
+        remote_path = f"{self.experiment_id}/{parent_run_id}/artifacts/transformation"
+        local_path = f"{TEMP_DIR}/{remote_path}"
+        os.makedirs(os.path.dirname(local_path), exist_ok=True)
+        mlflow.artifacts.download_artifacts(
+            artifact_uri=f"mlflow-artifacts:/{remote_path}",
+            dst_path=local_path,
+        )
+        return self._get_transformation_map(local_path)
+
+    def _get_transformation_map(self, local_path: str):
+        local_path = os.path.join(local_path, "transformation")
+        columns = [name for name in os.listdir(local_path) if os.path.isdir(os.path.join(local_path, name))]
+        transformation_map = {}
+        for column in columns:
+            column_path = os.path.join(local_path, column)
+            transformation_map[column] = {}
+            transformations = [name for name in os.listdir(column_path)]
+            for transformation in transformations:
+                transformation_path = os.path.join(column_path, transformation)
+                transformation_file = os.path.join(transformation_path, "transformation.pkl")
+                with open(transformation_file, 'rb') as f:
+                    func = pickle.load(f)
+                    transformation_map[column][transformation] = func
+        return transformation_map
+
     def save_transformation_manifest(self, manifest, parent_run_id: str):
         artifact_uri = f"transformation"
         local_path = f"{TEMP_DIR}/{artifact_uri}/manifest.json"
@@ -133,8 +158,8 @@ class Artifact:
         local_path = f"{TEMP_DIR}/{remote_path}"
         os.makedirs(os.path.dirname(local_path), exist_ok=True)
 
-        remote_file = f"mlflow-artifacts:/{remote_path}/transformation_manifest.json"
-        local_file = f"{local_path}/transformation_manifest.json"
+        remote_file = f"mlflow-artifacts:/{remote_path}/manifest.json"
+        local_file = f"{local_path}/manifest.json"
         mlflow.artifacts.download_artifacts(
             artifact_uri=remote_file,
             dst_path=local_path,
@@ -173,7 +198,6 @@ class Artifact:
         os.makedirs(os.path.dirname(local_path), exist_ok=True)
         with open(local_path, 'wb') as f:
             pickle.dump(model, f)
-        print(f"parent run {parent_run_id}")
         self.client.log_artifact(parent_run_id, local_path, artifact_uri)
         return
 
@@ -234,28 +258,22 @@ class Repository:
             return None
 
     def log_metric(self, key: str, value: float):
-        self.metrics_tracker.log_metric(key, value)
-        return self
+        self.metrics_tracker.log_metric(key, value); return self
 
     def log_param(self, key: str, value: any):
-        self.metrics_tracker.log_param(key, value)
-        return self
+        self.metrics_tracker.log_param(key, value); return self
 
     def set_tag(self, key: str, value: any):
-        self.metrics_tracker.set_tag(key, value)
-        return self
+        self.metrics_tracker.set_tag(key, value); return self
 
     def log_artifact(self, run_id: str, local_path: str, artifact_path: str = None):
-        self.artifact_repo.log_artifact(run_id, local_path, artifact_path)
-        return self
+        self.artifact_repo.log_artifact(run_id, local_path, artifact_path); return self
 
     def save_model(self, model, parent_run_id: str, run_name: str):
-        self.artifact_repo.save_model(model, parent_run_id, run_name)
-        return self
+        self.artifact_repo.save_model(model, parent_run_id, run_name); return self
 
     def save_model_manifest(self, manifest, parent_run_id: str, run_name: str):
-        self.artifact_repo.save_model_manifest(manifest, parent_run_id, run_name)
-        return self
+        self.artifact_repo.save_model_manifest(manifest, parent_run_id, run_name); return self
 
     def load_model_manifest(self, parent_run_id: str):
         return self.artifact_repo.load_model_manifest(parent_run_id)
@@ -292,11 +310,27 @@ class Repository:
         return self.metrics_tracker.find_child_runs(parent_run_id, order_by, filt)
 
     def set_tag_run(self, run_id: str, key: str, value: any):
-        self.metrics_tracker.set_tag_run(run_id, key, value)
-        return self
+        self.metrics_tracker.set_tag_run(run_id, key, value); return self
 
+    def find_child_runs_with_parent_id(self, parent_run_id: str, order_by: str, filt: dict):
+        return self.metrics_tracker.find_child_runs(parent_run_id, order_by, filt)
 
+    def load_all_models(self, parent_run_id: str):
+        # TODO: should be enum?
+        runs = self.find_child_runs_with_parent_id(parent_run_id, 'created', {"purpose": "model"})
+        models = []
+        manifests = []
+        for _, run in runs.iterrows():
+            model = self.artifact_repo.load_model(parent_run_id, run["tags.mlflow.runName"])
+            model_manifest = self.artifact_repo.load_model_manifest(parent_run_id, run["tags.mlflow.runName"])
+            models.append(model)
+            manifests.append(model_manifest)
+        return [models, manifests]
 
+    def load_transformations(self, parent_run_id: str):
+        manifest = self.artifact_repo.load_transformation_manifest(parent_run_id)
+        transformation_map = self.artifact_repo.load_all_transformations(parent_run_id)
+        return [transformation_map, manifest]
 @dataclass
 class InputItemBase:
     """Base class for input items"""
@@ -351,6 +385,8 @@ class MetadataItem:
             "value": self.value
         }
 
+InputItem = Union[CategoricalInputItem, NumericalInputItem]
+
 class Manifest:
     @staticmethod
     def _display_func(x: Union[Enum, str]):
@@ -371,7 +407,18 @@ class Manifest:
         return MetadataItem(key=key, display=Manifest._display_func(key), value=value)
 
     @staticmethod
-    def create_metadata_item_from_dict(key: str, value: any) -> MetadataItem:
-        return MetadataItem(key=key, display=Manifest._display_func(key), value=value)
+    def read_transformation_manifest(manifest: List[Dict[str, any]]) -> List[InputItem]:
+        container: List[Union[NumericalInputItem, CategoricalInputItem]] = []
+        for item in manifest:
+            if item["type"] == "numerical":
+                container.append(NumericalInputItem(**item))
+            elif item["type"] == "categorical":
+                container.append(CategoricalInputItem(**item))
+        return container
 
-InputItem = Union[CategoricalInputItem, NumericalInputItem]
+    @staticmethod
+    def read_model_manifest(manifest: List[Dict[str, any]]) -> List[MetadataItem]:
+        container: List[MetadataItem] = []
+        for item in manifest:
+            container.append(MetadataItem(**item))
+        return container
