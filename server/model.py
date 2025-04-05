@@ -2,8 +2,7 @@
 from dataclasses import dataclass, field
 from typing import List, Any, Dict, Union
 from datetime import timedelta
-import mlflow
-from mlflow.tracking import MlflowClient
+from repositories.mlflow import Repository
 import numpy as np
 import pickle
 import time
@@ -102,7 +101,7 @@ class Model:
     information: TabularModel
     run_id: str
     preprocess_map: Dict[str, Any]
-    predict_func: function
+    predict_func: callable
 
     def __init__(self, run_id: str):
         self.run_id = run_id
@@ -274,7 +273,7 @@ class ModelRepository:
                 return i
         return None
 
-    def validate_input(self, model_name: str, data: Dict[str, Any]) -> List[Dict[str, Any], str]:
+    def validate_input(self, model_name: str, data: Dict[str, Any]) -> List[Union[Dict[str, Any], str]]:
         model = self._find_model(model_name)
         return model.validate_input(data)
 
@@ -302,3 +301,10 @@ def generate_input_from_json(input: Dict[str, Any]) -> List[Input]:
                 max=value.get("max", None)
             ))
     return result
+
+class ArtifactGateway:
+    def __init__(self, tracker: str, experiment: str):
+        self.repository = Repository(tracker, experiment)
+
+    def load_all_tested_models(self):
+        model_manifest = self.repository.load_model_manifest()

@@ -1,6 +1,7 @@
 from dataclasses import dataclass, field
 from typing import List, Dict, Any, Optional, Union
 from starlette.responses import JSONResponse
+from abc import ABC, abstractmethod
 import server.model as model
 
 # How to use the data class for representing response message
@@ -44,8 +45,31 @@ import server.model as model
 #         content=response.to_dict()
 #     )
 
+class Response(ABC):
+    """Base class for all response classes"""
+    @abstractmethod 
+    def to_dict(self) -> Dict[str, Any]: pass
+    '''
+    Convert the response to a dictionary format.
+    This method should be implemented by subclasses to provide
+    '''
+
+    @abstractmethod
+    def to_json_response(self) -> JSONResponse: pass
+    '''
+    Convert the response to a JSONResponse format.
+    This method should be implemented by subclasses to provide
+    '''
+
 @dataclass
-class ListResponse:
+class NotObey(Response):
+    message: str
+    data: any
+
+_ = NotObey(message="", data=None)
+
+@dataclass
+class ListResponse(Response):
     """Response structure for the cfs2017 endpoint"""
     message: str
     data: List[model.ShortDescription] = field(default_factory=list)
@@ -57,9 +81,10 @@ class ListResponse:
     def to_json_response(self) -> JSONResponse:
         return JSONResponse(status_code=200, content=self.to_dict())
 
+_ = ListResponse(message="", data=[])
 
 @dataclass
-class MetadataReponse:
+class MetadataReponse(Response):
     """Content structure for model metadata"""
     message: str
     metadata: List[model.Metadata]
@@ -78,8 +103,9 @@ class MetadataReponse:
     def to_json_response(self) -> JSONResponse:
         return JSONResponse(status_code=200, content=self.to_dict())
 
+_ = MetadataReponse(message="", metadata=[], input=[], description="")
 @dataclass
-class InferenceResponse:
+class InferenceResponse(Response):
     """Content structure for inference response"""
     message: str
     output: model.Output
@@ -91,7 +117,9 @@ class InferenceResponse:
     def to_json_response(self) -> JSONResponse:
         return JSONResponse(status_code=200, content=self.to_dict())
 
-class ErrorResponse:
+_ = InferenceResponse(message="", output=model.Output())
+
+class ErrorResponse(Response):
     code: int
     message: str
     information: Dict[str, Any]
@@ -104,3 +132,6 @@ class ErrorResponse:
         }
     def to_json_response(self) -> JSONResponse:
         return JSONResponse(status_code=self.code, content=self.to_dict())
+
+
+_ = ErrorResponse(code=500, message="", information={})

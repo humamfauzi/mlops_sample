@@ -12,7 +12,7 @@ from column.abc import TabularColumn
 
 from train.sstruct import Pairs, Stage, FeatureTargetPair
 from train.wrapper import ProcessWrapper
-from repositories.mlflow import MLflowRepository
+from repositories.mlflow import Repository
 from dataclasses import dataclass, field
 from typing import Optional
 from enum import Enum
@@ -40,16 +40,16 @@ class Keeper:
     methods: TransformationMethods
 
 class DataTransformLazyCall(TabularDataTransform):
-    def __init__(self, column: TabularColumn, repository: MLflowRepository):
-        self.train_pair:  Optional[FeatureTargetPair] = None
-        self.valid_pair:  Optional[FeatureTargetPair] = None
-        self.test_pair:  Optional[FeatureTargetPair] = None
+    def __init__(self, column: TabularColumn, repository: Repository):
+        self.train_pair: Optional[FeatureTargetPair] = None
+        self.valid_pair: Optional[FeatureTargetPair] = None
+        self.test_pair: Optional[FeatureTargetPair] = None
         self.column = column
 
         self.transformed_data: Optional[pd.DataFrame] = None
         self.save_function_container = []
         self.keeper_array = []
-        # TODO Maybe we should split tracker and data transformation
+        # DONE Maybe we should split tracker and data transformation
         self.repository = repository
         self.transformation_save_function_container = []
     
@@ -75,8 +75,12 @@ class DataTransformLazyCall(TabularDataTransform):
             methods= methods)
         self.keeper_array.append(keeper)
         def save():
-            base_dir = "artifacts/process"
-            self._save_processing_as_blob(base_dir, keeper)
+            self.repository.save_transformation(
+                func=pw,
+                parent_run_id=self.repository.get_parent_run_id(),
+                column=column,
+                transformation_name=transformation_name,
+            )
         self.transformation_save_function_container.append(save)
         return self
 
@@ -99,8 +103,12 @@ class DataTransformLazyCall(TabularDataTransform):
             )
         self.keeper_array.append(keeper)
         def save():
-            base_dir = "artifacts/process"
-            self._save_processing_as_blob(base_dir, keeper)
+            self.repository.save_transformation(
+                func=keeper.function,
+                parent_run_id=self.repository.get_parent_run_id(),
+                column=column,
+                transformation_name=transformation_name,
+            )
         self.transformation_save_function_container.append(save)
         return self
 
@@ -123,18 +131,14 @@ class DataTransformLazyCall(TabularDataTransform):
             )
         self.keeper_array.append(keeper)
         def save():
-            base_dir = "artifacts/process"
-            self._save_processing_as_blob(base_dir, keeper)
+            self.repository.save_transformation(
+                func=ohe,
+                parent_run_id=self.repository.get_parent_run_id(),
+                column=column,
+                transformation_name=transformation_name,
+            )
         self.transformation_save_function_container.append(save)
         return self
-
-    def _save_processing_as_blob(self, directory, keeper):
-        fn = keeper.function
-        os.makedirs(f'{directory}/{keeper.column}', exist_ok=True)
-        path = f'{directory}/{keeper.column}/{keeper.name}.pkl'
-        with open(path, 'wb') as f:
-            pickle.dump(fn, f)
-        return path
 
     def _setup_transformation(self):
         '''
@@ -263,8 +267,11 @@ class DataTransformLazyCall(TabularDataTransform):
     def _save_transformation(self):
         for save_fn in self.transformation_save_function_container:
             save_fn()
-        self.repository.save_folder(path="preprocess")
+        self.save_manifest()
         return self
+
+    def save_manifest(self):
+        return 
 
 
 class DataTransform(TabularDataTransform):

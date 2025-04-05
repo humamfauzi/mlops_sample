@@ -6,16 +6,16 @@ from copy import copy
 from typing import Optional
 from train.sstruct import Pairs, Stage, FeatureTargetPair
 from train.column import TabularColumn
-from repositories.mlflow import MLflowRepository
+from repositories.mlflow import Repository
 from enum import Enum
 
 class Disk:
-    def __init__(self, path, name: str, repository: MLflowRepository = None):
+    def __init__(self, path, name: str, repository: Repository = None):
         self.path = path
         self.name = name
         self.loader: Optional[function] = None
         self.saver: Optional[function] = None
-        self.repository: Optional[MLflowRepository] = repository
+        self.repository: Optional[Repository] = repository
 
     def load_dataframe_via_csv(self, column: TabularColumn, load_options: dict):
         def loader() -> pd.DataFrame:

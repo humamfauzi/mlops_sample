@@ -3,7 +3,7 @@ import os
 import train.data_io as data_io
 import train.data_cleaner as data_cleaner
 import train.data_transform as data_transform
-from repositories.mlflow import MLflowRepository
+from repositories.mlflow import Repository
 from column.cfs2017 import CommodityFlow
 
 from sklearn.linear_model import LinearRegression, ElasticNet, Lasso
@@ -36,7 +36,7 @@ def singular_train():
     '''
     experiment_name = "humamtest_lazycall"
 
-    repository = MLflowRepository(TRACKER_PATH, experiment_name, "artifacts")
+    repository = Repository(TRACKER_PATH, experiment_name)
     data_loader_preprocess = (data_io.Disk(DATASET_PATH, "cfs_2017", repository=repository)
         .load_dataframe_via_csv(CommodityFlow, {"nrows": 200_000})
         .save_pair_via_parquet())

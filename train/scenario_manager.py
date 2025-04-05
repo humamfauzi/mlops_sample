@@ -1,5 +1,4 @@
 import mlflow
-from mlflow.models import infer_signature
 import os
 
 import time
@@ -12,7 +11,7 @@ from train.dataset import TrackingDataset
 from train.model import TabularModel
 from typing import Optional
 from train.sstruct import FeatureTargetPair, Pairs, Stage
-from repositories.mlflow import MLflowRepository
+from repositories.mlflow import Repository
 from sklearn.metrics import mean_squared_error
 
 # all run initiate here
@@ -23,7 +22,7 @@ class PreprocessScenarioManager:
         self.dataloader: Optional[Disk] = None
         self.datacleaner: Optional[TabularDataCleaner] = None
         self.datatransform: Optional[TabularDataTransform] = None
-        self.repository: Optional[MLflowRepository] = None
+        self.repository: Optional[Repository] = None
         self.experiment_name: Optional[str] = None
         return
     
@@ -32,7 +31,7 @@ class PreprocessScenarioManager:
         self.dataloader = dl
         return self
 
-    def set_repository(self, repository: MLflowRepository):
+    def set_repository(self, repository: Repository):
         self.repository = repository
         return self
 
@@ -116,12 +115,12 @@ class PreprocessScenarioManager:
 class ModelScenarioManager:
     def __init__(self):
         self.dataloader: Optional[Disk] = None
-        self.repository: Optional[MLflowRepository] = None
+        self.repository: Optional[Repository] = None
         self.pairs: Optional[Pairs] = None
         self.model_list = []
         return
 
-    def set_repository(self, repository: MLflowRepository):
+    def set_repository(self, repository: Repository):
         self.repository = repository
         return self
 
@@ -141,13 +140,6 @@ class ModelScenarioManager:
         for _ in range(4):
             cchar += random.choice(char)
         return f"MOD-{cchar}"
-
-    def set_tracking(self, path, name):
-        self.tracking_path = path
-        self.experiment_name = name
-        mlflow.set_tracking_uri(uri=self.tracking_path)
-        mlflow.set_experiment(self.experiment_name)
-        return self
 
     def pick_pair(self, stage: Stage) -> FeatureTargetPair:
         if self.pairs is None:
@@ -172,18 +164,25 @@ class ModelScenarioManager:
     def train(self):
         for mod in self.model_list:
             run_name = self.generate_name()
-            with mlflow.start_run(run_name = run_name , nested=True):
-                model_name = mod.__class__.__name__
-                ftp = self.pick_pair(Stage.TRAIN)
-                mod.fit(ftp.x_array(), ftp.y_array())
-                mlflow.log_metric("total_trained", ftp.X.shape[0])
-                mlflow.log_metric("total_features", ftp.X.shape[1])
-                mlflow.set_tag("purpose", "model")
-                mlflow.set_tag("level", "candidate")
-                self.check_mse_against(mod, Stage.TRAIN)
-                self.check_mse_against(mod, Stage.VALID)
-                self._save_processing_as_blob("artifacts/models", model_name, mod)
-        self._save_models()
+            self.repository.start_nested_run(run_name)
+            model_name = mod.__class__.__name__
+            ftp = self.pick_pair(Stage.TRAIN)
+            mod.fit(ftp.x_array(), ftp.y_array())
+
+            (self.repository.log_metric("total_trained", ftp.X.shape[0])
+            .log_metric("total_trained", ftp.X.shape[0])
+            .log_metric("total_features", ftp.X.shape[1])
+            .set_tag("purpose", "model")
+            .set_tag("level", "candidate"))
+
+            (self.check_mse_against(mod, Stage.TRAIN)
+            .check_mse_against(mod, Stage.VALID))
+
+            self.repository.save_model(mod, self.repository.get_parent_run_id(), run_name)
+            self.repository.end_nested_run()
+
+        # TODO: construct a model manifest here
+        # self.repository.save_model_manifest({}, self.repository.get_parent_run_id())
         return self
 
     def _save_models(self):
@@ -210,30 +209,20 @@ class ModelScenarioManager:
         if len(child_runs) == 0:
             raise ValueError("No child runs found for potential candidates")
         first = child_runs.iloc[0] 
-        self.repository.set_tag(first["run_id"], "level", "test")
+        self.repository.set_tag_run(first["run_id"], "level", "test")
         return self
-
-    def compose_filter_string(self, ddict):
-        final = []
-        for key, value in ddict.items():
-            final.append(f"tags.{key} = '{value}'")
-        return " AND ".join(final)
 
     def test_runs(self):
         child_runs = self.repository.find_child_runs(filt={"level": "test"}, order_by="created")
         if len(child_runs) == 0:
             raise ValueError("No child runs found for test runs")
         first = child_runs.iloc[0] 
-        mod = self.load_model(first["tags.mlflow.runName"])
-        self.check_mse_against(mod, Stage.TEST)
-        return self
+        mod = self.repository.load_model(self.repository.get_parent_run_id(), first["tags.mlflow.runName"])
+        return self.check_mse_against(mod, Stage.TEST)
 
     # TODO : Create a manifest in the parent run so it can read the manifest
     # and load the model. Manifest should contain all the model name and the
     # path to the model
-    def load_model(self, child_run_name: str):
-        model_path = self.repository.compose_model_path(child_run_name=child_run_name)
-        return self.repository.load_model(model_path)
     
     def _create_manifest(self, parent_run_id: str):
         path = "artifacts/model_manifest.json"
@@ -245,14 +234,14 @@ class ModelScenarioManager:
             order_by=f"metrics.{Stage.mse_metrics(Stage.TEST)}",
             filt={"level": "test"}
         )
-        best = child_runs[0]
-        self.repository.set_tag(best.info.run_id, "level", "champion")
+        best = child_runs.iloc[0]
+        self.repository.set_tag_run(best["run_id"], "level", "champion")
         return self
 
     def check_mse_against(self, mod, stage: Stage):
         ftp = self.pick_pair(stage)
         mse = mean_squared_error(ftp.y_array(), mod.predict(ftp.x_array()))
-        mlflow.log_metric(Stage.mse_metrics(stage), mse)
+        self.repository.log_metric(Stage.mse_metrics(stage), mse)
         return self
 
 # deprecated; should either use PreprocessScenarioManager or ModelScenarioManager
