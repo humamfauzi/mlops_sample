@@ -67,10 +67,7 @@ class ModelItem:
     display: str
     
     def to_dict(self) -> Dict[str, str]:
-        return {
-            "value": self.value,
-            "display": self.display
-        }
+        return { "value": self.value, "display": self.display }
 
 
 @dataclass

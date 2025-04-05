@@ -12,7 +12,7 @@ from column.abc import TabularColumn
 
 from train.sstruct import Pairs, Stage, FeatureTargetPair
 from train.wrapper import ProcessWrapper
-from repositories.mlflow import Repository
+from repositories.mlflow import Repository, Manifest
 from dataclasses import dataclass, field
 from typing import Optional
 from enum import Enum
@@ -196,6 +196,10 @@ class DataTransformLazyCall(TabularDataTransform):
     def transform_data(self, df):
         self.transformed_data = df
         (self
+            # save the transformation manifest
+            # contain information about the model input
+            ._save_manifest()
+
             # all data should be splitted first here
             # so all encoding and transformation is based on training data
             # to prevent learning leakage. All transformation happen between
@@ -267,11 +271,29 @@ class DataTransformLazyCall(TabularDataTransform):
     def _save_transformation(self):
         for save_fn in self.transformation_save_function_container:
             save_fn()
-        self.save_manifest()
+        self._save_manifest()
         return self
-
-    def save_manifest(self):
-        return 
+    
+    def _save_manifest(self):
+        df = self.transformed_data
+        manifest = []
+        for column in df.columns:
+            if column in self.column.categorical():
+                manifest.append(Manifest.create_categorical_input_item(
+                    key=column,
+                    enumeration=df[column].unique().tolist()
+                ).to_dict())
+            elif column in self.column.numerical():
+                manifest.append(Manifest.create_numerical_input_item(
+                    key=column,
+                    min=df[column].min(),
+                    max=df[column].max()
+                ).to_dict())
+        self.repository.save_transformation_manifest(
+            manifest=manifest,
+            parent_run_id=self.repository.get_parent_run_id()
+        )
+        return self
 
 
 class DataTransform(TabularDataTransform):

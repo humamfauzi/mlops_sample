@@ -230,14 +230,9 @@ class Model:
 class Sample:
     def __init__(self): pass
 class ModelRepository:
-    def __init__(self, tracker: str, experiment: str):
+    def __init__(self, repository: Repository):
         self.models = []
-        self.tracker = tracker
-        self.experiment_name = experiment
-        mlflow.set_tracking_uri(uri=self.tracking_url)
-        mlflow.set_experiment(self.experiment_name)
-        # TODO would change later
-        self.client = MlflowClient()
+        self.repository = repository
 
     def get(self) -> List[str]:
         pass
@@ -302,9 +297,19 @@ def generate_input_from_json(input: Dict[str, Any]) -> List[Input]:
             ))
     return result
 
-class ArtifactGateway:
-    def __init__(self, tracker: str, experiment: str):
-        self.repository = Repository(tracker, experiment)
 
-    def load_all_tested_models(self):
-        model_manifest = self.repository.load_model_manifest()
+class ModelServer:
+    def __init__(self, repository: Repository):
+        self.repository = repository
+
+    def load(self) -> "ModelServer":
+        parent_runs = self.repository.get_all_available_runs()
+        for run in parent_runs:
+            self.repository.load_run(run)
+        return self
+
+    def list() -> List[str]: return []
+
+    def metadata(self, model_name: str) -> TabularModel: pass
+
+    def infer(self, model_name: str, data: Dict[str, Any]) -> Output: pass

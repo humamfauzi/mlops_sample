@@ -60,11 +60,12 @@ def singular_train():
         .set_repository(repository)
         .set_dataloader(data_loader_train)
         .load_data()
-        .add_model(LinearRegression())
+        .add_model(LinearRegression(), "A basic Linear Regression. Using to test the training sequence from training to deployment")
         .train()
         .get_potential_candidates()
         .test_runs()
         .tag_champion())
+    repository.set_tag("base", "singular_train")
     repository.stop()
     return
 

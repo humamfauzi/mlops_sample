@@ -11,7 +11,7 @@ from train.dataset import TrackingDataset
 from train.model import TabularModel
 from typing import Optional
 from train.sstruct import FeatureTargetPair, Pairs, Stage
-from repositories.mlflow import Repository
+from repositories.mlflow import Repository, Manifest
 from sklearn.metrics import mean_squared_error
 
 # all run initiate here
@@ -157,28 +157,43 @@ class ModelScenarioManager:
                 raise ValueError("valid pairs cannot empty")
             return self.pairs.test
 
-    def add_model(self, model):
-        self.model_list.append(model)
+    def add_model(self, model, desc: str):
+        self.model_list.append((model, desc))
         return self
 
     def train(self):
-        for mod in self.model_list:
+        for mod, desc in self.model_list:
+            metadata_manifest = []
             run_name = self.generate_name()
             self.repository.start_nested_run(run_name)
             model_name = mod.__class__.__name__
             ftp = self.pick_pair(Stage.TRAIN)
+            start = time.time()
             mod.fit(ftp.x_array(), ftp.y_array())
 
-            (self.repository.log_metric("total_trained", ftp.X.shape[0])
+            (self.repository
+            .log_metric("total_trained", ftp.X.shape[0])
             .log_metric("total_trained", ftp.X.shape[0])
             .log_metric("total_features", ftp.X.shape[1])
             .set_tag("purpose", "model")
-            .set_tag("level", "candidate"))
+            .set_tag("level", "candidate")
+            .set_tag("description", desc)
+            .set_tag("algorithm", model_name))
 
-            (self.check_mse_against(mod, Stage.TRAIN)
-            .check_mse_against(mod, Stage.VALID))
+            metadata_manifest.extend([
+                Manifest.create_metadata_item("trained_rows", ftp.X.shape[0]).to_dict(),
+                Manifest.create_metadata_item("total_features", ftp.X.shape[1]).to_dict(),
+                Manifest.create_metadata_item("description", desc).to_dict(),
+                Manifest.create_metadata_item("algorithm", model_name).to_dict(),
+                Manifest.create_metadata_item("train_duration", time.time() - start).to_dict(),
+                Manifest.create_metadata_item("model_name", run_name).to_dict(),
+            ])
+
+            (self.check_mse_against(mod, Stage.TRAIN, metadata_manifest)
+            .check_mse_against(mod, Stage.VALID, metadata_manifest))
 
             self.repository.save_model(mod, self.repository.get_parent_run_id(), run_name)
+            self.repository.save_model_manifest(metadata_manifest, self.repository.get_parent_run_id(), run_name)
             self.repository.end_nested_run()
 
         # TODO: construct a model manifest here
@@ -218,16 +233,7 @@ class ModelScenarioManager:
             raise ValueError("No child runs found for test runs")
         first = child_runs.iloc[0] 
         mod = self.repository.load_model(self.repository.get_parent_run_id(), first["tags.mlflow.runName"])
-        return self.check_mse_against(mod, Stage.TEST)
-
-    # TODO : Create a manifest in the parent run so it can read the manifest
-    # and load the model. Manifest should contain all the model name and the
-    # path to the model
-    
-    def _create_manifest(self, parent_run_id: str):
-        path = "artifacts/model_manifest.json"
-        client = mlflow.tracking.MlflowClient()
-        client.log_artifact(run_id=parent_run_id, local_path=path)
+        return self.check_mse_against(mod, Stage.TEST, [])
 
     def tag_champion(self):
         child_runs = self.repository.find_child_runs(
@@ -236,12 +242,14 @@ class ModelScenarioManager:
         )
         best = child_runs.iloc[0]
         self.repository.set_tag_run(best["run_id"], "level", "champion")
+        self.repository.set_tag_run(self.repository.get_parent_run_id(), "stage", "production")
         return self
 
-    def check_mse_against(self, mod, stage: Stage):
+    def check_mse_against(self, mod, stage: Stage, metadata_manifest: Optional[Manifest] = []):
         ftp = self.pick_pair(stage)
         mse = mean_squared_error(ftp.y_array(), mod.predict(ftp.x_array()))
         self.repository.log_metric(Stage.mse_metrics(stage), mse)
+        metadata_manifest.append( Manifest.create_metadata_item(Stage.mse_metrics(stage), mse).to_dict())
         return self
 
 # deprecated; should either use PreprocessScenarioManager or ModelScenarioManager
