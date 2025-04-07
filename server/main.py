@@ -9,7 +9,6 @@ import server.response as response
 from repositories.mlflow import Repository
 from typing import Optional
 
-PORT = os.getenv("PORT")
 TRACKER_PATH = os.getenv("TRACKER_PATH") 
 ARTIFACT_DIR="server"
 app = FastAPI()
