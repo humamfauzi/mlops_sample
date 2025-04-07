@@ -62,13 +62,6 @@ class Response(ABC):
     '''
 
 @dataclass
-class NotObey(Response):
-    message: str
-    data: any
-
-_ = NotObey(message="", data=None)
-
-@dataclass
 class ListResponse(Response):
     """Response structure for the cfs2017 endpoint"""
     message: str
@@ -91,12 +84,14 @@ class MetadataReponse(Response):
     input: List[model.Input]
     description: str
     def to_dict(self) -> Dict[str, Any]:
+        print("metadata", self.metadata)
+        print("input", self.input)
         return {
             "message": self.message,
             "data": {
                 "description": self.description,
-                "metadata": [item.to_dict() for item in self.metadata],
-                "input": [item.to_dict() for item in self.input]
+                "metadata": self.metadata,
+                "input": self.input
             }
         }
 
@@ -117,8 +112,9 @@ class InferenceResponse(Response):
     def to_json_response(self) -> JSONResponse:
         return JSONResponse(status_code=200, content=self.to_dict())
 
-_ = InferenceResponse(message="", output=model.Output())
+_ = InferenceResponse(message="", output=model.NumericalInput(key="", display="", min=0.0, max=1.0))
 
+@dataclass
 class ErrorResponse(Response):
     code: int
     message: str

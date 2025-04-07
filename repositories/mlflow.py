@@ -71,7 +71,6 @@ class Tracker:
     def find_child_runs(self, parent_run_id: str, order_by: str, filt: dict):
         filt["mlflow.parentRunId"] = parent_run_id
         filter_string = self._compose_filter_string(filt)
-        print(f"Filter string: {filter_string}, {order_by}")
         runs = mlflow.search_runs(
             experiment_ids=[self.experiment_id], 
             filter_string=filter_string, 

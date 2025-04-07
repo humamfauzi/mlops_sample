@@ -73,8 +73,18 @@ Input = Union[CategoricalInput, NumericalInput]
 
 @dataclass
 class NumericalOutput:
-    value: float
+    value: Union[float, np.ndarray]
     time_elapsed: timedelta
+
+    def to_dict(self) -> Dict[str, Any]:
+        if isinstance(self.value, np.ndarray):
+            self.value = [ round(i, 2) for i in self.value.tolist()]
+        elif isinstance(self.value, (float, int)):
+            self.value = round(self.value, 2)
+        return {
+            "value": self.value,
+            "time_elapsed": f"{self.time_elapsed.total_seconds():.2f} seconds"
+        }
 
 class CategoricalOutput:
     value: str
@@ -89,6 +99,11 @@ class ShortDescription:
     name: str
     display: str
 
+    def to_dict(self) -> Dict[str, str]:
+        return {
+            "name": self.name,
+            "display": self.display
+        }
 @dataclass
 class TabularModel:
     name: str
@@ -296,7 +311,8 @@ class ModelData:
         result = self.model.predict(self.dict_to_list(transformed_data))
         elapsed_time = time.time() - start_time
         result = self._inverse_transform(result)
-        return [result, elapsed_time]
+        # TODO generalize for all model, not just numerical methods
+        return NumericalOutput(value=result, time_elapsed=timedelta(seconds=elapsed_time))
 
     def dict_to_list(self, data: Dict[str, Any]) -> List[float]:
         if len(self.ordering) == 0:
@@ -346,7 +362,7 @@ class ModelServer:
                 return model
         return ModelData()
 
-    def metadata(self, model_name: str) -> TabularModel:
+    def metadata(self, model_name: str):
         model = self._find_model(model_name)
         if model is None:
             return None
