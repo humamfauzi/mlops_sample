@@ -3,9 +3,15 @@ name: Build Server Container
 on:
   push:
     paths:
-      - 'server/server.py'
+      - 'server/main.py'
       - 'Makefile'
       - 'Dockerfile.server'
+    workflow_dispatch:
+      inputs:
+        build:
+          description: 'Build the server container'
+          required: true
+          default: 'true'
 
 jobs:
   build:
