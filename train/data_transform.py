@@ -154,14 +154,20 @@ class DataTransformLazyCall(TabularDataTransform):
 
 
     def _replace(self, keeper):
+        '''
+        replace the original column with the transformed column 
+        '''
         for pairs in [self.train_pair, self.valid_pair, self.test_pair]:
             if keeper.column in self.train_pair.X.columns:
                 transformed = keeper.function.transform(pairs.X[keeper.column].to_numpy().reshape(-1, 1))
                 pairs.X[keeper.column] = transformed
             else:
-                pairs.y = function.transform(pairs.y.to_numpy().reshape(-1,1))
+                pairs.y = pd.DataFrame(keeper.function.transform(pairs.y.to_numpy().reshape(-1,1)))
 
     def _append(self, keeper):
+        '''
+        append the transformed column and keep the original column
+        '''
         for pairs in [self.train_pair, self.valid_pair, self.test_pair]:
             if keeper.column not in pairs.X.columns:
                 raise ValueError(f"column {keeper.column} is not a feature")
@@ -169,6 +175,9 @@ class DataTransformLazyCall(TabularDataTransform):
             pairs.X[keeper.column] = transformed
 
     def _append_and_remove(self, keeper):
+        '''
+        append all the new columns and remove the original column
+        '''
         for pairs in [self.train_pair, self.valid_pair, self.test_pair]:
             if keeper.column not in pairs.X.columns:
                 raise ValueError(f"column {keeper.column} is not a feature")
@@ -278,6 +287,8 @@ class DataTransformLazyCall(TabularDataTransform):
         df = self.transformed_data
         manifest = []
         for column in df.columns:
+            if column == self.column.target():
+                continue
             if column in self.column.categorical():
                 manifest.append(Manifest.create_categorical_input_item(
                     key=column,
@@ -386,7 +397,6 @@ class DataTransform(TabularDataTransform):
                 "y": self.test_pair.y.shape,
             } 
         }
-        print(pd.DataFrame(ddict))
         return self
 
     # Currently we dont have insight about the best practice for saving

@@ -5,9 +5,9 @@ from types import Dict
 from fastapi import FastAPI, Request, Query
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse
-from server.model import ModelRepository
+from server.model import ModelRepository, ModelServer
 import server.response as response
-from types import Dict
+from types import Dict, Option
 
 PORT = os.getenv("PORT")
 TRACKER_PATH = os.getenv("TRACKER_PATH") 
@@ -35,11 +35,11 @@ app = FastAPI()
 app.add_middleware(TimeoutMiddleware, timeout=3) 
 
 # a singleton model provider
-CFS2017_MODEL_REPOSITORY = None
+CFS2017_MODEL_REPOSITORY: Option[ModelServer] = None
 @app.on_event("startup")
 async def startup_event():
     global CFS2017_MODEL_REPOSITORY
-    CFS2017_MODEL_REPOSITORY = ModelRepository(TRACKER_PATH, "humamtest_lazycall").load()
+    CFS2017_MODEL_REPOSITORY = ModelServer(TRACKER_PATH, "humamtest_lazycall").load()
 
 # check the connection for the server
 @app.get("/health")

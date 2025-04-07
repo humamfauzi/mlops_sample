@@ -293,7 +293,8 @@ class Repository:
     def start_run(self, run_name=None, nested=False):
         return self.metrics_tracker.start_run(run_name, nested)
 
-    def save_transformation(self, func, parent_run_id: str, column: str, transformation_name: str):
+    def save_transformation(self, func, parent_run_id: str, column: Union[str, Enum], transformation_name: str):
+        if isinstance(column, Enum): column = column.name
         return self.artifact_repo.save_transformation(func, parent_run_id, column, transformation_name)
 
     def load_transformation(self, func, parent_run_id: str, column: str, transformation_name: str):

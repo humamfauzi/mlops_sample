@@ -231,71 +231,7 @@ class Sample:
     def __init__(self): pass
 class ModelRepository:
     def __init__(self, repository: Repository):
-        self.models = []
-        self.repository = repository
-
-    def get(self) -> List[str]:
-        pass
-
-    def metadata(self, model_name: str) -> TabularModel:
-        model = self._find_model(model_name)
-        return model.information
-
-    def load(self) -> "ModelRepository":
-        runs = self.client.search_runs( experiment_ids=[self.experiment_id], filter_string="tags.production = 'true'",)
-        experiment_id = mlflow.get_experiment_by_name(self.experiment).experiment_id
-        for run in runs:
-            uri = f"mlflow-artifacts:/{experiment_id}/{run.info.run_id}/artifacts"
-            destination_path = "artifacts/{run.info.run_id}"
-            mlflow.artifacts.download_artifacts(artifact_uri=uri, dst_path=destination_path)
-            model = (Model(run.info.run_id)
-                .load_preprocess(destination_path)
-                .load_model(destination_path)
-                .load_metadata(destination_path))
-            self.models.append(model)
-        return self
-
-    def infer(self, model_name: str, data: Dict[str, Any]) -> Output:
-        model = self._find_model(model_name)
-        return model.predict(data)
-
-    def list(self) -> List[ShortDescription]:
-        return [model.short_description() for model in self.models]
-
-    def _find_model(self, model_name: str) -> "Model":
-        for i in model_name:
-            if i.information.name == model_name:
-                return i
-        return None
-
-    def validate_input(self, model_name: str, data: Dict[str, Any]) -> List[Union[Dict[str, Any], str]]:
-        model = self._find_model(model_name)
-        return model.validate_input(data)
-
-
-def generate_metadata_from_json(metadata: Dict[str, Any]) -> List[Metadata]:
-    result = []
-    for key, value in metadata.items():
-        result.append(Metadata(key=key, display=value["display"], value=value["value"]))
-    return result
-
-def generate_input_from_json(input: Dict[str, Any]) -> List[Input]:
-    result = []
-    for key, value in input.items():
-        if value["type"] == "categorical":
-            result.append(CategoricalInput(
-                key=key,
-                display=value["display"],
-                enumeration=value["enumeration"]
-            ))
-        elif value["type"] == "numerical":
-            result.append(NumericalInput(
-                key=key,
-                display=value["display"],
-                min=value.get("min", None),
-                max=value.get("max", None)
-            ))
-    return result
+        raise NotImplementedError("ModelRepository is deprecated")
 
 @dataclass
 class Metadata:
@@ -309,6 +245,7 @@ class ModelData:
     model_manifest: List[MetadataItem]
     transformation: Dict[str, Any]
     transformation_manifest: List[InputItem]
+    ordering: List[str] = field(default_factory=list)
 
     def _to_metadata_dict(self) -> Dict[str, Any]:
         return {
@@ -318,7 +255,6 @@ class ModelData:
         }
 
     def _find_metadata(self, key: str) -> MetadataItem:
-        print(f"Finding metadata for key: {self.model_manifest}")
         for item in self.model_manifest:
             if item.key == key:
                 return item
@@ -340,21 +276,46 @@ class ModelData:
         for key, value in data.items():
             if key not in self.transformation:
                 transformed_data[key] = value; continue
-            for transform_func in self.transformation[key]:
-                value = transform_func.transform(value)
+            for _, transform_func in self.transformation[key].items():
+                value = transform_func.transform(np.array(value).reshape(-1, 1))
             transformed_data[key] = value
         return transformed_data
+
+    def _inverse_transform(self, result) -> any:
+        for column, transformation_map in self.transformation.items():
+            if column in [tm.key for tm in self.transformation_manifest]:
+                continue
+            for _, transform_func in transformation_map.items():
+                result = transform_func.inverse_transform(result)
+        return result
 
     def infer(self, data: Dict[str, Any]) -> Output:
         start_time = time.time()
         filtered_data = {key: value for key, value in data.items() if key in self._get_all_inputs()}
         transformed_data = self._transform(filtered_data)
-        result = self.model.predict(transformed_data)
+        result = self.model.predict(self.dict_to_list(transformed_data))
         elapsed_time = time.time() - start_time
+        result = self._inverse_transform(result)
         return [result, elapsed_time]
+
+    def dict_to_list(self, data: Dict[str, Any]) -> List[float]:
+        if len(self.ordering) == 0:
+            self.ordering = self._find_metadata("ordering").value
+        arr = np.array([data[key] for key in self.ordering if key in data.keys()]).reshape(-1, 1)
+        return arr
 
     def _get_all_inputs(self) -> List[str]:
         return [tm.key for tm in self.transformation_manifest]
+
+    def validate_input(self, data: Dict[str, Any]) -> List[Input]:
+        reconstruct = {}
+        available_inputs = [tm.key for tm in self.transformation_manifest]
+        input_keys = [key for key in data.keys()]
+        for ai in available_inputs:
+            if ai not in input_keys:
+                return {}, f"key {ai} is missing"
+            reconstruct[ai] = data[ai]
+        return reconstruct, ""
     
 class ModelServer:
     def __init__(self, repository: Repository):
@@ -367,9 +328,10 @@ class ModelServer:
             [models, model_manifests] = self.repository.load_all_models(run)
             [transformation, transformation_manifest] = self.repository.load_transformations(run)
             for model, model_manifest in zip(models, model_manifests):
+                model_manifest = Manifest.read_model_manifest(model_manifest)
                 self.available_models.append(ModelData(
                     model=model,
-                    model_manifest=Manifest.read_model_manifest(model_manifest),
+                    model_manifest=model_manifest,
                     transformation=transformation,
                     transformation_manifest=Manifest.read_transformation_manifest(transformation_manifest),
                 ))
@@ -389,6 +351,11 @@ class ModelServer:
         if model is None:
             return None
         return model.get_metadata()
+
+    def validate_input(self, model_name: str, data: Dict[str, Any]) -> List[Input]:
+        for model in self.available_models:
+            if model.get_model_name() == model_name:
+                return model.validate_input(data)
 
     def infer(self, model_name: str, data: Dict[str, Any]) -> Output:
         model =  self._find_model(model_name)

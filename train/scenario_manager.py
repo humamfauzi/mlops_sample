@@ -187,6 +187,7 @@ class ModelScenarioManager:
                 Manifest.create_metadata_item("algorithm", model_name).to_dict(),
                 Manifest.create_metadata_item("train_duration", time.time() - start).to_dict(),
                 Manifest.create_metadata_item("model_name", run_name).to_dict(),
+                Manifest.create_metadata_item("ordering", [c for c in ftp.X.columns]).to_dict(),
             ])
 
             (self.check_mse_against(mod, Stage.TRAIN, metadata_manifest)
@@ -195,9 +196,6 @@ class ModelScenarioManager:
             self.repository.save_model(mod, self.repository.get_parent_run_id(), run_name)
             self.repository.save_model_manifest(metadata_manifest, self.repository.get_parent_run_id(), run_name)
             self.repository.end_nested_run()
-
-        # TODO: construct a model manifest here
-        # self.repository.save_model_manifest({}, self.repository.get_parent_run_id())
         return self
 
     def _save_models(self):

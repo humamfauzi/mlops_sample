@@ -80,7 +80,6 @@ class TrackingDataset(Dataset):
             "schema": self.properties.schema,
             "profile": str(profile),
         }
-        print(">>>>>>>>>>>>>>>>", ddict)
         return ddict
 
     def to_json(self):

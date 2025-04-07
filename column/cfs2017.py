@@ -83,4 +83,4 @@ class CommodityFlow(Enum):
         used when we drop some column from the original dataset
         """
         all = cls.numerical() + cls.categorical()
-        return list(set(all) & set(current_column))
+        return list((set(all) - set([cls.target()])) & set(current_column))

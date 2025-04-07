@@ -48,6 +48,11 @@ class FeatureTargetPair:
         self.y = y
         self.stage = stage
 
+    def str_columns(self):
+        self.X.columns = [col.name if isinstance(col, Enum) else col for col in self.X.columns]
+        self.y.columns = [col.name if isinstance(col, Enum) else col for col in self.y.columns]
+        return 
+
     def print_shapes(self):
         print("stages", self.stage)
         print("X", self.X.shape)

@@ -13,6 +13,7 @@ class Disk:
     def __init__(self, path, name: str, repository: Repository = None):
         self.path = path
         self.name = name
+        # TODO change loader and saver to be an array of functions
         self.loader: Optional[function] = None
         self.saver: Optional[function] = None
         self.repository: Optional[Repository] = repository
@@ -45,18 +46,21 @@ class Disk:
         if self.saver is None:
             raise ValueError("should define the saving method first")
         self.saver(data)
-    
+
     def save_pair_via_parquet(self):
         def saver(pairs):
             if not isinstance(pairs, Pairs):
                 raise TypeError("Input data must be of type Pairs")
             base = f"{self.path}/{self.name}"
+            pairs.train.str_columns()
+            pairs.valid.str_columns()
+            pairs.test.str_columns()
             (self._save_parquet_data(pairs.train.X, f"{base}/train/feature.parquet")
-                ._save_parquet_data(pairs.train.y.to_frame(), f"{base}/train/target.parquet")
+                ._save_parquet_data(pairs.train.y, f"{base}/train/target.parquet")
                 ._save_parquet_data(pairs.valid.X, f"{base}/valid/feature.parquet")
-                ._save_parquet_data(pairs.valid.y.to_frame(), f"{base}/valid/target.parquet")
+                ._save_parquet_data(pairs.valid.y, f"{base}/valid/target.parquet")
                 ._save_parquet_data(pairs.test.X, f"{base}/test/feature.parquet")
-                ._save_parquet_data(pairs.test.y.to_frame(), f"{base}/test/target.parquet"))
+                ._save_parquet_data(pairs.test.y, f"{base}/test/target.parquet"))
         self.saver = saver
         return self
 

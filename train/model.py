@@ -79,7 +79,6 @@ class Model(TabularModel):
         prefix = self.generate_random_string(4)
         for model in models:
             model_name = model.__class__.__name__
-            print("testing for ", model_name)
             train_mse, valid_mse = self.train_validate(model)
             mlflow.log_metric("train_mse", train_mse)
             mlflow.log_metric("valid_mse", valid_mse)
