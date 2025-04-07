@@ -1,7 +1,7 @@
 import json
-from repositories.abc import Manifest, DataIO
+from repositories.abc import Manifest
 
-class DummyMLflowRepository(Manifest, DataIO):
+class DummyMLflowRepository(Manifest):
     """
     A dummy implementation of the MLflowRepository for testing purposes.
     It mocks the behavior of MLflow without actually interacting with an MLflow server.
@@ -77,7 +77,7 @@ class DummyMLflowRepository(Manifest, DataIO):
         """
         self.manifests[f"model_manifest_{id}"] = manifest
 
-    def save_transformation_manifest(self, id: str, manifest: dict):
+    def save_transformation_manifest(self, parent_run_id: str, manifest: dict):
         """
         Saves a transformation manifest to the in-memory store.
         :param id: The unique identifier for the transformation.
@@ -114,4 +114,14 @@ class DummyMLflowRepository(Manifest, DataIO):
         Save the folder to the specified path.
         :param path: The path to save the folder.
         """
+        pass
+
+    def get_parent_run_id(self):
+        """
+        Mocks retrieving the parent run ID.
+        :return: A dummy parent run ID.
+        """
+        return "dummy_parent_run_id"
+
+    def save_transformation(self, func, parent_run_id: str, column: str, transformation_name: str):
         pass
