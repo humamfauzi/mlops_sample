@@ -14,7 +14,7 @@ services:
       timeout: 5s
       retries: 5
     networks:
-      - internal
+      - my-app-network
   mlflow:
     image: humamf/py-mlflow
     ports:
@@ -35,11 +35,11 @@ services:
       database:
         condition: service_healthy
     networks:
-      - internal
+      - my-app-network
 
 volumes:
   train:
 
 networks:
-  internal:
-    driver: bridge
+  my-app-network:
+    external: true
