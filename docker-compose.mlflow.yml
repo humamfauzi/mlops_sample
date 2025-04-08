@@ -31,8 +31,6 @@ services:
       - ${MLFLOW_PORT}
       - --backend-store-uri
       - 'postgresql://mlflow_user:mlflow_password@database:5432/db'
-      - --artifacts-destination
-      - s3://humamf-artifacts
     depends_on:
       database:
         condition: service_healthy
