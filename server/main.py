@@ -1,7 +1,9 @@
 import async_timeout
 import asyncio
 import os
-from fastapi import FastAPI, Request, Query
+from fastapi import FastAPI, Request 
+from fastapi.middleware.cors import CORSMiddleware
+
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse
 from server.model import ModelServer
@@ -13,6 +15,18 @@ TRACKER_PATH = os.getenv("TRACKER_PATH")
 ARTIFACT_DIR="server"
 app = FastAPI()
 
+origins = [
+    "http://localhost:3000",
+    "https://humamf.com"
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 class TimeoutMiddleware(BaseHTTPMiddleware):
     def __init__(self, app, timeout: int):
         super().__init__(app)
