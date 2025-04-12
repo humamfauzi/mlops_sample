@@ -41,7 +41,7 @@ train-terminal:
 # provide endpoint path that accessible from user
 # it should be able to load the artifacts for inference process
 server-terminal:
-	docker exec -ti mlops_sample-server-1 /bin/bash
+	docker exec -u root -ti mlops_sample-server-1 /bin/bash
 
 create-server-container:
 	docker buildx build --platform linux/amd64 -t humamf/mlops-server:amd64 -f Dockerfile.server --push .

@@ -13,20 +13,12 @@ from typing import Optional
 
 TRACKER_PATH = os.getenv("TRACKER_PATH") 
 ARTIFACT_DIR="server"
-app = FastAPI()
 
 origins = [
     "http://localhost:3000",
     "https://humamf.com"
 ]
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=origins,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
 class TimeoutMiddleware(BaseHTTPMiddleware):
     def __init__(self, app, timeout: int):
         super().__init__(app)
@@ -44,6 +36,14 @@ class TimeoutMiddleware(BaseHTTPMiddleware):
             )
 
 app = FastAPI()
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 # Add timeout middleware to limit the request
 app.add_middleware(TimeoutMiddleware, timeout=3) 
 
