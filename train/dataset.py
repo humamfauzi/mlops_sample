@@ -1,5 +1,3 @@
-from mlflow.data.dataset import Dataset
-from mlflow.data.dataset_source import DatasetSource
 from typing import Optional, Generic, TypeVar, Dict, List
 from dataclasses import dataclass, field, asdict
 import numpy as np
@@ -44,7 +42,7 @@ class TabularDatasetProperties:
 
 
 
-class TrackingDataset(Dataset):
+class TrackingDataset:
     def __init__(self, source: str, name: str, description: str):
         self.properties: TabularDatasetProperties = TabularDatasetProperties(
             source=source,

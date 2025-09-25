@@ -1,4 +1,3 @@
-import mlflow
 import os
 
 import time
@@ -11,7 +10,7 @@ from train.dataset import TrackingDataset
 from train.model import TabularModel
 from typing import Optional
 from train.sstruct import FeatureTargetPair, Pairs, Stage
-from repositories.mlflow import Repository, Manifest
+from repositories.dummy import DummyMLflowRepository as Repository, Manifest
 from sklearn.metrics import mean_squared_error
 
 # all run initiate here

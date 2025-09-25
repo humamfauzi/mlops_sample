@@ -1,4 +1,3 @@
-import mlflow
 import random
 
 from abc import ABC, abstractmethod
@@ -7,7 +6,6 @@ from sklearn.tree import DecisionTreeRegressor
 from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor
 from sklearn.neighbors import KNeighborsRegressor
 from sklearn.metrics import mean_squared_error
-from mlflow.models import infer_signature
 
 from enum import Enum
 from typing import Optional

@@ -1,5 +1,8 @@
 import json
+from typing import Any, Dict, List, Union
+from enum import Enum
 from repositories.abc import Manifest
+from dataclasses import dataclass, field
 
 class DummyMLflowRepository(Manifest):
     """
@@ -125,3 +128,93 @@ class DummyMLflowRepository(Manifest):
 
     def save_transformation(self, func, parent_run_id: str, column: str, transformation_name: str):
         pass
+
+@dataclass
+class InputItemBase:
+    """Base class for input items"""
+    key: str
+    display: str
+
+
+@dataclass
+class CategoricalInputItem(InputItemBase):
+    """Categorical input item for the model metadata response"""
+    type: str = "categorical"
+    enumeration: List[str] = field(default_factory=list)
+    
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "type": self.type,
+            "key": self.key,
+            "display": self.display,
+            "enumeration": self.enumeration
+        }
+
+
+@dataclass
+class NumericalInputItem(InputItemBase):
+    """Numerical input item for the model metadata response"""
+    type: str = "numerical"
+    min: float = None
+    max: float = None
+    
+    def to_dict(self) -> Dict[str, Any]:
+        result = {
+            "type": self.type,
+            "key": self.key,
+            "display": self.display
+        }
+        if self.min is not None:
+            result["min"] = self.min
+        if self.max is not None:
+            result["max"] = self.max
+        return result
+@dataclass
+class MetadataItem:
+    """Metadata item for the model metadata response"""
+    key: str
+    display: str
+    value: Any
+    
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "key": self.key,
+            "display": self.display,
+            "value": self.value
+        }
+
+class Manifest:
+    @staticmethod
+    def _display_func(x: Union[Enum, str]):
+        if isinstance(x, str):
+            return x.replace("_", " ").title()
+        return x.name.replace("_", " ").title()
+
+    @staticmethod
+    def create_numerical_input_item(key: Enum, min: float = None, max: float = None) -> NumericalInputItem:
+        return NumericalInputItem(key=key.name, display=Manifest._display_func(key), min=min, max=max)
+
+    @staticmethod
+    def create_categorical_input_item(key: Enum, enumeration: List[str]) -> CategoricalInputItem:
+        return CategoricalInputItem(key=key.name, display=Manifest._display_func(key), enumeration=enumeration)
+
+    @staticmethod
+    def create_metadata_item(key: str, value: Any) -> MetadataItem:
+        return MetadataItem(key=key, display=Manifest._display_func(key), value=value)
+
+    @staticmethod
+    def read_transformation_manifest(manifest: List[Dict[str, any]]) -> List[InputItemBase]:
+        container: List[Union[NumericalInputItem, CategoricalInputItem]] = []
+        for item in manifest:
+            if item["type"] == "numerical":
+                container.append(NumericalInputItem(**item))
+            elif item["type"] == "categorical":
+                container.append(CategoricalInputItem(**item))
+        return container
+
+    @staticmethod
+    def read_model_manifest(manifest: List[Dict[str, any]]) -> List[MetadataItem]:
+        container: List[MetadataItem] = []
+        for item in manifest:
+            container.append(MetadataItem(**item))
+        return container

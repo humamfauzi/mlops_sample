@@ -1,15 +1,7 @@
-from train.scenario_manager import PreprocessScenarioManager, ModelScenarioManager
+from .scenario_manager import PreprocessScenarioManager, ModelScenarioManager
 import os
-import train.data_io as data_io
-import train.data_cleaner as data_cleaner
-import train.data_transform as data_transform
-from repositories.mlflow import Repository
+from . import data_io, data_cleaner, data_transform
 from column.cfs2017 import CommodityFlow
-
-from sklearn.linear_model import LinearRegression, ElasticNet, Lasso
-from sklearn.tree import DecisionTreeRegressor
-from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor
-from sklearn.neighbors import KNeighborsRegressor
 import argparse
 
 DATASET_PATH = "dataset"
@@ -69,20 +61,19 @@ def singular_train():
     repository.stop()
     return
 
+def list_all_possible_instructions():
+    folder_path = "../train_config"
+    files = os.listdir(folder_path)
+    print("Available instructions:", files)
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Run different functions.")
-    parser.add_argument("function_name", type=str, help="Name of the function to run (train, multimodel_train, describer)")
-
+    parser.add_argument("instruction", type=str, help="Name of the instruction set.")
+    parser.add_argument("instruction_list", help="list all available instructions", action="store_true")
     args = parser.parse_args()
-    function_map = {
-        "base_train": base_train,
-        "multimodel_train": multimodel_train,
-        "describer": describer,
-        "singular_train": singular_train
-    }
 
-    if args.function_name in function_map:
-        function_map[args.function_name]()
-    else:
-        print("Invalid function name. Choose from 'train', 'multimodel_train', 'describer'.")
-    
+    if args.instruction_list:
+        list_all_possible_instructions()
+    elif args.instruction:
+        call_instruction(args.instruction)
+

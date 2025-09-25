@@ -1,5 +1,66 @@
 This is ML Ops project using Commodity Flow Survey 2017.
 
+# UV Package Manager
+
+This project uses UV for Python package management and dependency resolution. UV is a fast Python package manager that provides better performance and dependency resolution compared to pip.
+
+## Installing UV
+
+If you don't have UV installed, you can install it using one of these methods:
+
+```bash
+# Using the official installer (recommended)
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# Or using pip
+pip install uv
+
+# Or using pipx (if you have it)
+pipx install uv
+```
+
+## Using UV in this Project
+
+```bash
+# Install all project dependencies
+uv sync
+
+# Add a new dependency
+uv add <package-name>
+
+# Remove a dependency
+uv remove <package-name>
+
+# Run Python with the project environment
+uv run python <script.py>
+
+# Run tests using pytest
+uv run pytest
+
+# Run tests with project-specific options
+uv run pytest -x --disable-warnings --ignore=pgdata -vv
+
+# Run a specific test file
+uv run pytest path/to/test_file.py
+
+# Activate the virtual environment
+source .venv/bin/activate  # On Linux/Mac
+# or
+.venv\Scripts\activate     # On Windows
+
+# Install dependencies for development
+uv sync --dev
+```
+
+## Project Dependencies
+
+The project dependencies are managed in `pyproject.toml`. Key dependencies include:
+- scikit-learn: For machine learning models
+- numpy: For numerical computations
+- pandas: For data manipulation
+- fastapi: For API endpoints
+- pytest: For testing
+
 # Dataset
 This machine learning operations use Commodilty Flow Survey 2017 ([datasource](https://www.census.gov/data/datasets/2017/econ/cfs/historical-datasets.html), [guide](https://www2.census.gov/programs-surveys/cfs/datasets/2017/cfs_2017_puf_users_guide.pdf)). We try to predict the price of the good
 based on variable we have like classification of goods, origin state, destination state, its weight and other variable.

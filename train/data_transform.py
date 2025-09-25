@@ -2,7 +2,6 @@ import pandas as pd
 import numpy as np
 import os 
 import pickle
-import mlflow
 
 from abc import ABC, abstractmethod
 from sklearn.preprocessing import OneHotEncoder, MinMaxScaler
@@ -12,7 +11,7 @@ from column.abc import TabularColumn
 
 from train.sstruct import Pairs, Stage, FeatureTargetPair
 from train.wrapper import ProcessWrapper
-from repositories.mlflow import Repository, Manifest
+from repositories.dummy import DummyMLflowRepository, Manifest
 from dataclasses import dataclass, field
 from typing import Optional
 from enum import Enum
@@ -40,7 +39,7 @@ class Keeper:
     methods: TransformationMethods
 
 class DataTransformLazyCall(TabularDataTransform):
-    def __init__(self, column: TabularColumn, repository: Repository):
+    def __init__(self, column: TabularColumn, repository: DummyMLflowRepository):
         self.train_pair: Optional[FeatureTargetPair] = None
         self.valid_pair: Optional[FeatureTargetPair] = None
         self.test_pair: Optional[FeatureTargetPair] = None

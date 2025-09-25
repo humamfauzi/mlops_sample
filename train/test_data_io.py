@@ -1,7 +1,12 @@
 import pandas as pd
 import pytest
 import os
-import tempfile
+import warnings
+
+# Suppress warnings for the entire module
+warnings.filterwarnings("ignore")
+# Or for specific warning types
+# warnings.filterwarnings("ignore", category=UserWarning)
 
 from .data_io import Disk
 from enum import Enum

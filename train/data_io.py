@@ -1,28 +1,23 @@
 from abc import ABC, abstractmethod
 import os
 import pandas as pd
-import mlflow
 from copy import copy
 from typing import Optional
 from train.sstruct import Pairs, Stage, FeatureTargetPair
 from train.column import TabularColumn
-from repositories.mlflow import Repository
 from enum import Enum
 
 class Disk:
-    def __init__(self, path, name: str, repository: Repository = None):
+    def __init__(self, path, name: str):
         self.path = path
         self.name = name
         # TODO change loader and saver to be an array of functions
         self.loader: Optional[function] = None
         self.saver: Optional[function] = None
-        self.repository: Optional[Repository] = repository
 
     def load_dataframe_via_csv(self, column: TabularColumn, load_options: dict):
         def loader() -> pd.DataFrame:
             raw_data = pd.read_csv(f"{self.path}/{self.name}.csv", **load_options)
-            defined = mlflow.data.from_pandas(raw_data, name=self.name)
-            mlflow.log_input(defined)
             raw_data = self._replace_columns(raw_data, column)
             return copy(raw_data)
         self.loader = loader
@@ -85,8 +80,6 @@ class Disk:
             xte = pd.read_parquet(f"{base}/test/feature.parquet")
             yte = pd.read_parquet(f"{base}/test/target.parquet")
             ftest = FeatureTargetPair(xte, yte, Stage.TEST)
-            defined = mlflow.data.from_pandas(xtr, name=self.path)
-            mlflow.log_input(defined)
             return Pairs(ftrain, fvalid, ftest)
         self.loader = loader
         return self
