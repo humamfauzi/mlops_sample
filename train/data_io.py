@@ -2,18 +2,19 @@ from abc import ABC, abstractmethod
 import os
 import pandas as pd
 from copy import copy
-from typing import Optional
+from typing import Optional, List
 from train.sstruct import Pairs, Stage, FeatureTargetPair
 from train.column import TabularColumn
 from enum import Enum
 
 class Disk:
-    def __init__(self, path, name: str):
+    def __init__(self, path, name: str, loader=None, saver=None, column=None):
         self.path = path
         self.name = name
         # TODO change loader and saver to be an array of functions
-        self.loader: Optional[function] = None
-        self.saver: Optional[function] = None
+        self.loader: Optional[function] = loader
+        self.saver: Optional[function] = saver
+        self.column: Optional[TabularColumn] = column
 
     def load_dataframe_via_csv(self, column: TabularColumn, load_options: dict):
         def loader() -> pd.DataFrame:
@@ -98,4 +99,20 @@ class Disk:
             raise ValueError("raw data need to be loaded first")
         if len(enum) != len(data.columns):
             raise ValueError(f"Cannot replace columns: enum {len(enum)} df {len(data.columns)}")
+        return data
+
+    @classmethod
+    def parse_instruction(cls, properties: dict, call: List[dict]):
+        # ignore the properties
+        c = cls(properties.get("path"), properties.get("file"))
+        c.column = TabularColumn.from_string(properties.get("reference"))
+        for step in call:
+            if step["type"] == "load":
+                c.load_dataframe_via_csv(c.column, {"nrows": properties.get("n_rows", None)})
+        return c
+        
+    def execute(self, input_data):
+        if input_data is not None:
+            raise ValueError("Data IO should be the first step therefore it should not have any input")
+        data = self.load_data()
         return data

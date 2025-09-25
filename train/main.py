@@ -3,6 +3,7 @@ import os
 from . import data_io, data_cleaner, data_transform
 from column.cfs2017 import CommodityFlow
 import argparse
+import json
 
 DATASET_PATH = "dataset"
 TRACKER_PATH = os.getenv("TRACKER_PATH")
@@ -62,9 +63,21 @@ def singular_train():
     return
 
 def list_all_possible_instructions():
-    folder_path = "../train_config"
+    folder_path = "train_config"
     files = os.listdir(folder_path)
-    print("Available instructions:", files)
+    json_files = [f for f in files if f.endswith('.json')]
+    if not json_files:
+        print("No JSON files found in the train_config folder.")
+        return
+    
+    instructions = []
+    for file_name in json_files:
+        file_path = os.path.join(folder_path, file_name)
+        with open(file_path, 'r') as f:
+            jf = json.load(f) 
+            instructions.append({"name": jf["name"], "content": jf["description"]})
+
+    print("Available instructions:", instructions)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Run different functions.")

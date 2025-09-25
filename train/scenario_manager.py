@@ -1,8 +1,12 @@
 import os
+from abc import ABC, abstractmethod
+from enum import Enum
 
 import time
 import random
 import pickle
+from dataclasses import dataclass
+from typing import List, Optional
 from train.data_io import Disk
 from train.data_cleaner import TabularDataCleaner
 from train.data_transform import TabularDataTransform
@@ -249,59 +253,71 @@ class ModelScenarioManager:
         metadata_manifest.append( Manifest.create_metadata_item(Stage.mse_metrics(stage), mse).to_dict())
         return self
 
-# deprecated; should either use PreprocessScenarioManager or ModelScenarioManager
-class ScenarioManager:
+
+
+class InstructionFactory:
     def __init__(self):
-        self.dataloader: Optional[Disk] = None
-        self.datacleaner: Optional[TabularDataCleaner] = None
-        self.datatransform: Optional[TabularDataTransform] = None
-        self.model: Optional[TabularModel] = None
-        self.run_name: Optional[str] = None
-        return
+        pass
 
-    def set_run_name(self, name: str):
-        self.run_name = name
+    @classmethod
+    def parse_instruction(cls, instruction: dict):
+        instructions = []
+        for inst in instruction["instructions"]:
+            instructions.append(InstructionStep(
+                type=InstructionEnum.from_string(inst["type"]),
+                properties=inst.get("properties", {}),
+                call=inst.get("call", [])
+            ))
+        return Instruction(
+            name=instruction["name"],
+            description=instruction["description"],
+            instructions=instructions
+        )
+
+class InstructionEnum(Enum):
+    DATA_IO = "data_io"
+    DATA_CLEANER = "data_cleaner"
+    DATA_TRANSFORMER = "data_transformer"
+    MODEL_TRAINER = "model_trainer"
+
+    @classmethod
+    def from_string(cls, value: str):
+        try:
+            return cls(value)
+        except ValueError:
+            raise ValueError(f"Unknown InstructionEnum value: {value}")
+
+@dataclass
+class InstructionStep:
+    type: InstructionEnum
+    properties: dict
+    # let the respective class handle the parsing of dictionary
+    call: List[dict]
+
+@dataclass
+class Instruction:
+    name: str
+    description:str
+    instructions: List[InstructionStep]
+
+class ScenarioManager:
+    def __init__(self, instruction: Instruction):
+        self.instruction = instruction
+        self.pipeline: List[any] = []
+    def construct(self):
+        for step in self.instruction.instructions:
+            if step.type == InstructionEnum.DATA_IO:
+                self.pipeline.append(Disk.parse_instruction(step.properties, step.call))
+            elif step.type == InstructionEnum.DATA_CLEANER:
+                self.pipeline.append(DataCleaner(step.properties))
+            elif step.type == InstructionEnum.DATA_TRANSFORMER:
+                self.pipeline.append(DataTransformer(step.properties))
+            elif step.type == InstructionEnum.MODEL_TRAINER:
+                self.pipeline.append(ModelTrainer(step.properties))
         return self
-
-    def set_dataloader(self, dataloader:Disk):
-        self.dataloader = dataloader
-        return self
-
-    def set_datacleaner(self, datacleaner: TabularDataCleaner):
-        self.datacleaner = datacleaner
-        return self
-
-    def set_datatransform(self, datatransform: TabularDataTransform):
-        if self.run_name is None:
-            raise ValueError("run name is required for data transform tracking")
-        self.datatransform = datatransform
-        self.datatransform.set_run_name(self.run_name)
-        return self
-
-    def set_train(self, train: TabularModel):
-        self.model = train
-        self.model.set_run_name(self.run_name)
-        self.model.set_tracker(self.is_using_tracker)
-        return self
-
-    def set_tracking(self, path, name):
-        self.tracking_path = path
-        self.experiment_name = name
-        mlflow.set_tracking_uri(uri=self.tracking_path)
-        mlflow.set_experiment(self.experiment_name)
-        return self
-
-    def start_run(self, run_name):
-        mlflow.start_run(run_name=run_name)
-        self.is_using_tracker = True
-        return self
-
-    def end_run(self):
-        mlflow.end_run()
-
-    def default_path(self):
-        df = self.dataloader.load_data()
-        df_cleaned = self.datacleaner.clean_data(df)
-        pairs = self.datatransform.transform_data(df_cleaned)
-        self.model.train_data(pairs)
-        return self
+    def execute(self):
+        recurse = None
+        for component in self.pipeline:
+            recurse = component.execute(recurse)
+        return recurse
+    

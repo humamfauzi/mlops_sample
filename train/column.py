@@ -41,6 +41,20 @@ class TabularColumn(ABC):
     def feature(cls, current_column: List[Enum]):
         pass
 
+    @classmethod
+    def from_string(cls, name: str):
+        if name == "commodity_flow":
+            return CommodityFlow
+        elif name == "sample":
+            return SampleEnum
+        else:
+            raise ValueError(f"Cannot find enum with name {name}")
+
+class SampleEnum(Enum):
+    COLUMN_ID = 1
+    COLUMN_FEATURE = 2
+    COLUMN_TARGET = 3
+
 # NOTE: the number in enumerate should correspond to column number it will later replaced
 # all usage should be using its name therefore the column would be full capital
 class CommodityFlow(Enum):
