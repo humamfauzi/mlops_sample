@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from column.cfs2017 import CommodityFlow
+from train.column import TabularColumn
 import pandas as pd
 from copy import copy
 from typing import Optional
@@ -13,7 +13,7 @@ class TabularDataCleaner(ABC):
         """
         pass
 
-class DataFrameLazyCall(TabularDataCleaner):
+class Cleaner(TabularDataCleaner):
     '''
     Data cleaning with lazy call. Means that the data cleaning will be done
     after the data is called. This is useful when we want to chain the data cleaning.
@@ -48,53 +48,22 @@ class DataFrameLazyCall(TabularDataCleaner):
         self.call_container.append(lambda: self.cleaned_data.dropna(inplace=True))
         return self
 
+    @classmethod
+    def parse_instruction(cls, properties: dict, call: list):
+        c = cls()
+        c.column = TabularColumn.from_string(properties.get("reference"))
+        for step in call:
+            cols = [c.column.from_enum(col) for col in step.get("columns", [])]
+            if step["type"] == "remove_columns":
+                c.remove_columns(cols)
+            elif step["type"] == "filter_columns":
+                c.filter_columns(cols)
+            elif step["type"] == "remove_nan_rows":
+                c.remove_nan_rows()
+        return c
 
-class DataFrame(TabularDataCleaner):
-    def __init__(self):
-        self.cleaned_data: pd.DataFrame = None
-
-    # TODO it should have separate class since we want all dataframe can handle all enums
-    # yet we dont know how to structurize it, therefore it stays for now
-    # potential canidates is to let the enums decide what column it want to remove
-    # different scenario have different methods
-    def basic_removal(self):
-        return [
-            # using states to limit column number
-            CommodityFlow.ORIGIN_DISTRICT.name,
-            CommodityFlow.ORIGIN_CFS_AREA.name,
-            CommodityFlow.DESTINATION_DISTRICT.name,
-            CommodityFlow.DESTINATION_CFS_AREA.name,
-
-            # we use NAICS as goods categarization
-            CommodityFlow.SCTG.name,
-            CommodityFlow.QUARTER.name,
-
-            # we use actual route instead of geodesic distance
-            CommodityFlow.SHIPMENT_DISTANCE_CIRCLE.name,
-
-            # we disable all options
-            CommodityFlow.IS_TEMPERATURE_CONTROLLED.name,
-            CommodityFlow.IS_EXPORT.name,
-            CommodityFlow.EXPORT_COUNTRY.name,
-            CommodityFlow.HAZMAT.name,
-            CommodityFlow.WEIGHT_FACTOR.name,
-        ]
-
-    def clean_data(self, df: pd.DataFrame) -> pd.DataFrame:
-        self.cleaned_data = df
-        (self
-            .remove_columns(self.basic_removal())
-            .remove_nan_rows())
-        return copy(self.cleaned_data)
-    
-    def remove_columns(self, columns):
-        self.cleaned_data.drop(columns, axis=1, inplace=True)
-        return self
-
-    def remove_nan_rows(self):
-        self.cleaned_data.dropna(inplace=True)
-        return self
-
-    def filter_columns(self, columns):
-        self.cleaned_data = self.cleaned_data[columns]
-        return self
+    def execute(self, input): 
+        if input is None:
+            raise ValueError("Data Cleaner should not be the first step therefore it should have input")
+        data = self.clean_data(input)
+        return data

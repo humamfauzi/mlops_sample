@@ -18,6 +18,7 @@ class Disk:
 
     def load_dataframe_via_csv(self, column: TabularColumn, load_options: dict):
         def loader() -> pd.DataFrame:
+            print(load_options)
             raw_data = pd.read_csv(f"{self.path}/{self.name}.csv", **load_options)
             raw_data = self._replace_columns(raw_data, column)
             return copy(raw_data)
@@ -108,7 +109,7 @@ class Disk:
         c.column = TabularColumn.from_string(properties.get("reference"))
         for step in call:
             if step["type"] == "load":
-                c.load_dataframe_via_csv(c.column, {"nrows": properties.get("n_rows", None)})
+                c.load_dataframe_via_csv(c.column, {"nrows": step.get("n_rows", None)})
         return c
         
     def execute(self, input_data):

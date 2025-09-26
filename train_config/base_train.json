@@ -28,7 +28,7 @@
         },
         {
             "type": "data_transformer",
-            "properties": { "type": "lazy_call" },
+            "properties": { "type": "lazy_call", "reference": "commodity_flow" },
             "call": [
                 {
                     "type": "log_transformation",

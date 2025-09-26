@@ -4,16 +4,16 @@ import os
 import pickle
 
 from abc import ABC, abstractmethod
-from sklearn.preprocessing import OneHotEncoder, MinMaxScaler
+from sklearn.preprocessing import OneHotEncoder, MinMaxScaler, StandardScaler, Normalizer
 from sklearn.model_selection import train_test_split
 
-from column.abc import TabularColumn
+from train.column import TabularColumn
 
 from train.sstruct import Pairs, Stage, FeatureTargetPair
 from train.wrapper import ProcessWrapper
 from repositories.dummy import DummyMLflowRepository, Manifest
 from dataclasses import dataclass, field
-from typing import Optional
+from typing import Optional, List
 from enum import Enum
 
 class TabularDataTransform(ABC):
@@ -33,10 +33,206 @@ class TransformationMethods(Enum):
 
 @dataclass
 class Keeper:
+    # The collector of the transformation
+    # Collect all neccessary transformation properties so it could be
+    # reproduced later by the server
     name: str
     column: Enum
     function: any
     methods: TransformationMethods
+
+class Transformer:
+    def __init__(self, column: TabularColumn):
+        self.column = column
+        self.keepers = []
+
+    @classmethod
+    def parse_instruction(cls, properties: dict, call: List[dict]):
+        column = TabularColumn.from_string(properties.get("reference"))
+        c = cls(column)
+        for step in call:
+            if step["type"] == "log_transformation":
+                for col in step["columns"]:
+                    c.keepers.append(
+                        Keeper(
+                            name="log",
+                            column=column.from_enum(col),
+                            function=ProcessWrapper(np.log, np.exp),
+                            methods=TransformationMethods[step["condition"].upper()]
+                        )
+                    )
+            elif step["type"] == "normalization":
+                for col in step["columns"]:
+                    c.keepers.append(
+                        Keeper(
+                            name="normalization",
+                            column=column.from_enum(col),
+                            function=Normalizer(norm='l2'),
+                            methods=TransformationMethods[step["condition"].upper()]
+                        )
+                    )
+            elif step["type"] == "min_max_transformation":
+                for col in step["columns"]:
+                    c.keepers.append(
+                        Keeper(
+                            name="min_max",
+                            column=column.from_enum(col),
+                            function=MinMaxScaler(),
+                            methods=TransformationMethods[step["condition"].upper()]
+                        )
+                    )
+            elif step["type"] == "one_hot_encoding":
+                for col in step["columns"]:
+                    c.keepers.append(
+                        Keeper(
+                            name="one_hot_encoding",
+                            column=column.from_enum(col),
+                            function=OneHotEncoder(sparse_output=False, handle_unknown='infrequent_if_exist'),
+                            methods=TransformationMethods.APPEND_AND_REMOVE
+                        )
+                    )
+            elif step["type"] == "standardization":
+                for col in step["columns"]:
+                    c.keepers.append(
+                        Keeper(
+                            name="standardization",
+                            column=column.from_enum(col),
+                            function=StandardScaler(),
+                            methods=TransformationMethods[step["condition"].upper()]
+                        )
+                    )
+            return c
+    
+    def _save_manifest(self, input_data):
+        # TODO: Require some tracking mechanism
+        pass
+
+    def _split_stage(self, transformed_data: pd.DataFrame):
+        # Based on column enums, choose all column that belong to a feature
+        train_cols = self.column.feature(transformed_data.columns)
+        train = transformed_data[train_cols]
+
+        # Based on column enums, choose all column that belong to be a target
+        # Some column might be an ID therefore we still need to declare which one is the target
+        test = transformed_data[self.column.target()]
+
+        # double split, first is the train and test
+        # and the second one is for valid and test based on previous test
+        # TODO: make the test size configurable
+        Xtr, Xt, ytr, yt = train_test_split(
+                train,
+                test,
+                test_size=0.2,
+                random_state=42,
+        )
+        Xv, Xte, yv, yte = train_test_split(
+                Xt,
+                yt,
+                test_size=0.5,
+                random_state=42,
+        )
+
+        # Collect it as a pair for easier grouping
+        train_pair = FeatureTargetPair(Xtr, ytr, Stage.TRAIN)
+        valid_pair = FeatureTargetPair(Xv, yv, Stage.VALID)
+        test_pair = FeatureTargetPair(Xte, yte, Stage.TEST)
+        return train_pair, valid_pair, test_pair
+
+    def _setup_transformation(self, train_pair: FeatureTargetPair):
+        # Fitting all the transformation function ONLY to training data to avoid information leakage
+        # this is only the fitting part, the application of the transformation happen later
+        for keeper in self.keepers:
+            if keeper.column in train_pair.X.columns:
+                keeper.function.fit(train_pair.X[keeper.column].to_numpy().reshape(-1, 1))
+            else:
+                keeper.function.fit(train_pair.y.to_numpy().reshape(-1, 1))
+        return self
+        
+    def _applies_transformation_to_all(self, train_pair, validation_pair, test_pair):
+        for keeper in self.keepers:
+            if keeper.methods == TransformationMethods.REPLACE:
+                return self._replace(keeper, train_pair, validation_pair, test_pair)
+            elif keeper.methods == TransformationMethods.APPEND:
+                return self._append(keeper, train_pair, validation_pair, test_pair)
+            elif keeper.methods == TransformationMethods.APPEND_AND_REMOVE:
+                return self._append_and_remove(keeper, train_pair, validation_pair, test_pair)
+
+    def _replace(self, keeper, train_pair, validation_pair, test_pair):
+        '''
+        replace the original column with the transformed column 
+        '''
+        for pairs in [train_pair, validation_pair, test_pair]:
+            if keeper.column in train_pair.X.columns:
+                transformed = keeper.function.transform(pairs.X[keeper.column].to_numpy().reshape(-1, 1))
+                pairs.X[keeper.column] = transformed
+            else:
+                pairs.y = pd.DataFrame(keeper.function.transform(pairs.y.to_numpy().reshape(-1,1)))
+        return self
+
+    def _append(self, keeper, train_pair, validation_pair, test_pair):
+        '''
+        append the transformed column and keep the original column
+        '''
+        for pairs in [train_pair, validation_pair, test_pair]:
+            if keeper.column not in pairs.X.columns:
+                raise ValueError(f"column {keeper.column} is not a feature")
+            transformed = keeper.function.transform(pairs.X[keeper.column].to_numpy().reshape(-1, 1))
+            pairs.X[keeper.column] = transformed
+        return self
+
+    def _append_and_remove(self, keeper, train_pair, validation_pair, test_pair):
+        '''
+        append all the new columns and remove the original column
+        '''
+        for pairs in [train_pair, validation_pair, test_pair]:
+            if keeper.column not in pairs.X.columns:
+                raise ValueError(f"column {keeper.column} is not a feature")
+            transformed = keeper.function.transform(pairs.X[[keeper.column]])
+            encoded_columns = keeper.function.get_feature_names_out([keeper.column.name])
+            new_columns = pd.DataFrame(transformed, columns=encoded_columns, dtype='int', index=pairs.X.index)
+
+            pairs.X = pd.concat([
+                pairs.X.drop(columns=[keeper.column]), 
+                new_columns
+            ], axis=1)
+        return self
+
+    def _shape_check(self, train_pair, validation_pair, test_pair):
+        return self
+
+    def _save_transformation(self):
+        pass
+
+    def execute(self, input_data: pd.DataFrame) -> Pairs:
+        # save the transformation manifest
+        # contain information about the model input
+        self._save_manifest(input_data)
+
+        # all data should be splitted first here
+        # so all encoding and transformation is based on training data
+        # to prevent learning leakage. All transformation happen between
+        # splitting and reapplied
+        train_pair, validation_pair, test_pair = self._split_stage(input_data)
+        (self
+            # call all collected transformation based on train data but
+            # does not applies it to train immdiately
+            ._setup_transformation(train_pair)
+
+            # call all transformation function and applies it to all stages
+            ._applies_transformation_to_all(train_pair, validation_pair, test_pair)
+
+            # ensure that every stage has the same column count
+            ._shape_check(train_pair, validation_pair, test_pair)
+
+            # call function to save the transformation to model repository
+            # for future retrieval
+            ._save_transformation()
+        )
+        return self._get_pairs(train_pair, validation_pair, test_pair)
+
+    def _get_pairs(self, train_pair, validation_pair, test_pair) -> Pairs:
+        return Pairs(train_pair, validation_pair, test_pair)
+
 
 class DataTransformLazyCall(TabularDataTransform):
     def __init__(self, column: TabularColumn, repository: DummyMLflowRepository):
@@ -162,6 +358,7 @@ class DataTransformLazyCall(TabularDataTransform):
                 pairs.X[keeper.column] = transformed
             else:
                 pairs.y = pd.DataFrame(keeper.function.transform(pairs.y.to_numpy().reshape(-1,1)))
+            return self
 
     def _append(self, keeper):
         '''
@@ -172,6 +369,7 @@ class DataTransformLazyCall(TabularDataTransform):
                 raise ValueError(f"column {keeper.column} is not a feature")
             transformed = keeper.function.transform(self.train_pair.X[keeper.column].to_numpy().reshape(-1, 1))
             pairs.X[keeper.column] = transformed
+        return self
 
     def _append_and_remove(self, keeper):
         '''
@@ -180,13 +378,18 @@ class DataTransformLazyCall(TabularDataTransform):
         for pairs in [self.train_pair, self.valid_pair, self.test_pair]:
             if keeper.column not in pairs.X.columns:
                 raise ValueError(f"column {keeper.column} is not a feature")
-            transformed = keeper.function.transform(pairs.X[keeper.column].to_numpy().reshape(-1, 1))
+
+            # Transform and create new columns
+            transformed = keeper.function.transform(pairs.X[[keeper.column]])
             encoded_columns = keeper.function.get_feature_names_out([keeper.column.name])
-            new_columns = pd.DataFrame(transformed, columns=encoded_columns, dtype='int')
-            pairs.X = pairs.X.drop(keeper.column, axis=1)
-            arrayed = np.concat([np.array(pairs.X), new_columns], axis=1)
-            all_columns = list(pairs.X.columns) + list(new_columns.columns)
-            pairs.X = pd.DataFrame(arrayed, columns=all_columns)
+            new_columns = pd.DataFrame(transformed, columns=encoded_columns, dtype='int', index=pairs.X.index)
+
+            # Remove original and concatenate new columns
+            pairs.X = pd.concat([
+                pairs.X.drop(columns=[keeper.column]), 
+                new_columns
+            ], axis=1)
+        return self
 
     def _applies_transformation_to_all(self):
         '''
@@ -194,12 +397,11 @@ class DataTransformLazyCall(TabularDataTransform):
         '''
         for keeper in self.keeper_array:
             if keeper.methods == TransformationMethods.REPLACE:
-                self._replace(keeper)
+                return self._replace(keeper)
             elif keeper.methods == TransformationMethods.APPEND:
-                self._append(keeper)
+                return self._append(keeper)
             elif keeper.methods == TransformationMethods.APPEND_AND_REMOVE:
-                self._append_and_remove(keeper)
-        return self
+                return self._append_and_remove(keeper)
 
     def transform_data(self, df):
         self.transformed_data = df
@@ -306,7 +508,7 @@ class DataTransformLazyCall(TabularDataTransform):
         return self
 
 
-class DataTransform(TabularDataTransform):
+class DataTransformDeprecated(TabularDataTransform):
     def __init__(self, enum: TabularColumn):
         self.ohe = {}
         self.mm = {}

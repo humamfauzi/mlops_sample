@@ -8,8 +8,8 @@ import pickle
 from dataclasses import dataclass
 from typing import List, Optional
 from train.data_io import Disk
-from train.data_cleaner import TabularDataCleaner
-from train.data_transform import TabularDataTransform
+from train.data_cleaner import Cleaner
+from train.data_transform import Transformer
 from train.dataset import TrackingDataset
 from train.model import TabularModel
 from typing import Optional
@@ -23,7 +23,7 @@ from sklearn.metrics import mean_squared_error
 class PreprocessScenarioManager:
     def __init__(self):
         self.dataloader: Optional[Disk] = None
-        self.datacleaner: Optional[TabularDataCleaner] = None
+        self.datacleaner: Optional[Cleaner] = None
         self.datatransform: Optional[TabularDataTransform] = None
         self.repository: Optional[Repository] = None
         self.experiment_name: Optional[str] = None
@@ -38,11 +38,11 @@ class PreprocessScenarioManager:
         self.repository = repository
         return self
 
-    def set_datacleaner(self, dc: TabularDataCleaner):
+    def set_datacleaner(self, dc: Cleaner):
         self.datacleaner = dc
         return self
 
-    def set_datatransform(self, dt: TabularDataTransform):
+    def set_datatransform(self, dt: Transformer):
         self.datatransform = dt
         return self
 
@@ -309,11 +309,11 @@ class ScenarioManager:
             if step.type == InstructionEnum.DATA_IO:
                 self.pipeline.append(Disk.parse_instruction(step.properties, step.call))
             elif step.type == InstructionEnum.DATA_CLEANER:
-                self.pipeline.append(DataCleaner(step.properties))
+                self.pipeline.append(Cleaner.parse_instruction(step.properties, step.call))
             elif step.type == InstructionEnum.DATA_TRANSFORMER:
-                self.pipeline.append(DataTransformer(step.properties))
+                self.pipeline.append(Transformer.parse_instruction(step.properties, step.call))
             elif step.type == InstructionEnum.MODEL_TRAINER:
-                self.pipeline.append(ModelTrainer(step.properties))
+                self.pipeline.append(Trainer.parse_instruction(step.properties))
         return self
     def execute(self):
         recurse = None

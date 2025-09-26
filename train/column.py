@@ -53,7 +53,41 @@ class TabularColumn(ABC):
 class SampleEnum(Enum):
     COLUMN_ID = 1
     COLUMN_FEATURE = 2
-    COLUMN_TARGET = 3
+    COLUMN_FEATURE_DELETED = 3 
+    COLUMN_TARGET = 4
+
+    @classmethod
+    def from_enum(cls, e:str):
+        for member in cls:
+            if member.name == e.upper():
+                return member
+        raise ValueError(f"Cannot find enum with name {e}")
+
+    @classmethod
+    def primary_id(cls):
+        return cls.COLUMN_ID
+
+    @classmethod
+    def target(cls):
+        return cls.COLUMN_TARGET
+
+    @classmethod
+    def categorical(cls):
+        return []
+
+    @classmethod
+    def numerical(cls):
+        return [
+            cls.COLUMN_FEATURE,
+            cls.COLUMN_TARGET
+        ]
+
+    @classmethod
+    def feature(cls, current_column):
+        """
+        """
+        all = cls.numerical() + cls.categorical()
+        return list(set(all) & set(current_column))
 
 # NOTE: the number in enumerate should correspond to column number it will later replaced
 # all usage should be using its name therefore the column would be full capital
@@ -91,6 +125,13 @@ class CommodityFlow(Enum):
     EXPORT_COUNTRY = 18
     HAZMAT = 19
     WEIGHT_FACTOR = 20
+
+    @classmethod
+    def from_enum(cls, e:str):
+        for member in cls:
+            if member.name == e.upper():
+                return member
+        raise ValueError(f"Cannot find enum with name ")
 
     @classmethod
     def primary_id(cls):
