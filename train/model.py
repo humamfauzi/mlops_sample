@@ -11,7 +11,7 @@ from sklearn.metrics import mean_squared_error
 
 from enum import Enum
 from typing import Optional, List
-from train.sstruct import Pairs, FeatureTargetPair
+from train.sstruct import Pairs
 from sklearn.model_selection import ParameterGrid
 
 class TabularModel(ABC):
@@ -49,7 +49,7 @@ class ModelWrapper:
     def train(self, pairs: Pairs):
         if not isinstance(pairs, Pairs):
             raise TypeError("Input data must be of type Pairs")
-        self.model.fit(pairs.train.x_array(), pairs.train.y)
+        self.model.fit(pairs.train.x_array(), np.array(pairs.train.y).reshape(-1,))
         return self
 
     def validate(self, pairs: Pairs, metrics: List[str]):
@@ -153,6 +153,16 @@ class ModelTrainer:
             return RandomForestRegressor
         elif model_type == "linear_regression":
             return LinearRegression
+        elif model_type == "decision_tree_regressor":
+            return DecisionTreeRegressor
+        elif model_type == "gradient_boosting_regressor":
+            return GradientBoostingRegressor
+        elif model_type == "elastic_net":
+            return ElasticNet
+        elif model_type == "lasso":
+            return Lasso
+        elif model_type == "k_neighbors_regressor":
+            return KNeighborsRegressor
         else:
             raise ValueError(f"Model type {model_type} is not supported")
 

@@ -89,7 +89,7 @@ class Disk:
     def _replace_columns(data: pd.DataFrame, enum: TabularColumn):
         Disk._check_length(data, enum)
         # it has minus one because index in python began with 0
-        replace_map = {data.columns[e.value-1]:e for e in enum}
+        replace_map = {data.columns[e.value-1]:e.name for e in enum}
         data.rename(columns=replace_map, inplace=True)
         return data
 

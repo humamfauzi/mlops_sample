@@ -14,13 +14,14 @@
             "call": [
                 {
                     "type": "load",
-                    "n_rows": 1000
+                    "n_rows": 1000000
                 }
             ]
         },
         {
             "type": "data_cleaner",
-            "properties": { "type": "lazy_call" },
+            "properties": { "type": "lazy_call",  "reference": "commodity_flow"},
+                
             "call": [
                 {"type": "filter_columns", "columns": ["shipment_weight", "shipment_value"]},
                 {"type": "drop_na"}
@@ -32,26 +33,34 @@
             "call": [
                 {
                     "type": "log_transformation",
-                    "condition": ["replace"],
+                    "condition": "replace",
                     "columns": ["shipment_weight", "shipment_value"]
                 },
                 {
                     "type": "normalization",
-                    "condition": ["replace"],
+                    "condition": "replace",
                     "columns": ["shipment_weight", "shipment_value"]
                 }
             ]
         },
         {
             "type": "model_trainer",
-            "properties": {},
+            "properties": {
+                "objective": "best_model",
+                "random_state": 42,
+                "fold": 5,
+                "parameter_grid": {
+                    "type": "exhaustive"
+                },
+                "metrics": ["rmse"]
+            },
             "call": [
                 {
                     "model_type": "random_forest_regressor",
                     "hyperparameters": {
                         "n_estimators": [50, 100],
                         "max_depth": [5, 10],
-                        "random_state": 42
+                        "random_state": [42]
                     }
                 },
                 {
@@ -64,7 +73,7 @@
                         "n_estimators": [50, 100],
                         "learning_rate": [0.01, 0.1],
                         "max_depth": [3, 5],
-                        "random_state": 42
+                        "random_state": [42]
                     }
                 }
             ]

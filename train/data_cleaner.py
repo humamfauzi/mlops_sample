@@ -53,7 +53,7 @@ class Cleaner(TabularDataCleaner):
         c = cls()
         c.column = TabularColumn.from_string(properties.get("reference"))
         for step in call:
-            cols = [c.column.from_enum(col) for col in step.get("columns", [])]
+            cols = [c.column.from_enum(col).name for col in step.get("columns", [])]
             if step["type"] == "remove_columns":
                 c.remove_columns(cols)
             elif step["type"] == "filter_columns":

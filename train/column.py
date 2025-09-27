@@ -65,11 +65,11 @@ class SampleEnum(Enum):
 
     @classmethod
     def primary_id(cls):
-        return cls.COLUMN_ID
+        return cls.COLUMN_ID.name
 
     @classmethod
     def target(cls):
-        return cls.COLUMN_TARGET
+        return cls.COLUMN_TARGET.name
 
     @classmethod
     def categorical(cls):
@@ -78,8 +78,8 @@ class SampleEnum(Enum):
     @classmethod
     def numerical(cls):
         return [
-            cls.COLUMN_FEATURE,
-            cls.COLUMN_TARGET
+            cls.COLUMN_FEATURE.name,
+            cls.COLUMN_TARGET.name
         ]
 
     @classmethod
