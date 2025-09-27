@@ -198,3 +198,86 @@ class TestScenarioManager:
         assert isinstance(result, Pairs)
         assert isinstance(result.train, FeatureTargetPair)
         assert result.train.X.shape == (8, 2)
+
+    def test_data_disk_clean_transform_train(self, sample_csv_path):
+        base = {
+            "name": "base_test",
+            "description": "A basic test to load data from disk and clean it",
+            "instructions": [
+                {
+                    "type": "data_io",
+                    "properties": {
+                        "path": FOLDER,
+                        "file": FILENAME,
+                        "format": "csv",
+                        "reference": "sample"
+                    },
+                    "call": [
+                        {
+                            "type": "load",
+                        }
+                    ]
+                },
+                {
+                    "type": "data_cleaner",
+                    "properties": {
+                        "reference": "sample"
+                    },
+                    "call": [
+                        {
+                            "type": "filter_columns",
+                            "columns": ["column_feature", "column_target"]
+                        }
+                    ]
+                },
+                {
+                    "type": "data_transformer",
+                    "properties": {
+                        "reference": "sample"
+                    },
+                    "call": [
+                        {
+                            "type": "log_transformation",
+                            "condition": "replace",
+                            "columns": ["column_feature", "column_target"]
+                        },
+                        {
+                            "type": "normalization",
+                            "condition": "replace",
+                            "columns": ["column_feature", "column_target"]
+                        }
+                    ]
+                },
+                {
+                    "type": "model_trainer",
+                    "properties": {
+                        "objective": "best_model",
+                        "random_state": 42,
+                        "fold": 5,
+                        "parameter_grid": {
+                            "type": "exhaustive"
+                        },
+                        "metrics": ["rmse"]
+                    },
+                    "call": [
+                        {
+                            "model_type": "random_forest_regressor",
+                            "hyperparameters": {
+                                "n_estimators": [50, 100],
+                                "max_depth": [5, 10]
+                            }
+                        },
+                        {
+                            "model_type": "linear_regression",
+                            "hyperparameters": {}
+                        }
+                    ]
+                }
+            ]
+        }
+        instruction = InstructionFactory.parse_instruction(base)
+        sm = ScenarioManager(instruction)
+        assert sm is not None
+
+        result = sm.construct().execute()
+        assert result is None

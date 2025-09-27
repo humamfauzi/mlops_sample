@@ -11,7 +11,7 @@ from train.data_io import Disk
 from train.data_cleaner import Cleaner
 from train.data_transform import Transformer
 from train.dataset import TrackingDataset
-from train.model import TabularModel
+from train.model import ModelTrainer
 from typing import Optional
 from train.sstruct import FeatureTargetPair, Pairs, Stage
 from repositories.dummy import DummyMLflowRepository as Repository, Manifest
@@ -313,7 +313,7 @@ class ScenarioManager:
             elif step.type == InstructionEnum.DATA_TRANSFORMER:
                 self.pipeline.append(Transformer.parse_instruction(step.properties, step.call))
             elif step.type == InstructionEnum.MODEL_TRAINER:
-                self.pipeline.append(Trainer.parse_instruction(step.properties))
+                self.pipeline.append(ModelTrainer.parse_instruction(step.properties, step.call))
         return self
     def execute(self):
         recurse = None
