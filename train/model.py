@@ -125,8 +125,8 @@ class ModelTrainer:
         pass
 
     @classmethod
-    def parse_instruction(cls, properties: dict, call: List[dict]):
-        m = cls(**properties)
+    def parse_instruction(cls, properties: dict, call: List[dict], facade):
+        m = cls(facade, **properties)
         for step in call:
             m.add_model(step)
         return m

@@ -2,6 +2,17 @@
 {
     "name": "base_train",
     "description": "Base training configuration. Used for testing and debugging pipeline.",
+    "repository": {
+        "experiment_id": "experiment_001",
+        "data": {
+            "type": "sqlite",
+            "properties": { "name": "mlops_sample.db" }
+        },
+        "object": {
+            "type": "disk",
+            "properties": { "path": "temp/mlops" }
+        }
+    },
     "instructions": [
         {
             "type": "data_io",

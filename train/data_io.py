@@ -6,9 +6,11 @@ from typing import Optional, List
 from train.sstruct import Pairs, Stage, FeatureTargetPair
 from train.column import TabularColumn
 from enum import Enum
+import time
 
 class Disk:
-    def __init__(self, path, name: str, loader=None, saver=None, column=None):
+    def __init__(self, facade, path, name: str, loader=None, saver=None, column=None):
+        self.facade = facade
         self.path = path
         self.name = name
         # TODO change loader and saver to be an array of functions
@@ -18,10 +20,22 @@ class Disk:
 
     def load_dataframe_via_csv(self, column: TabularColumn, load_options: dict):
         def loader() -> pd.DataFrame:
+            start = time.time()
             raw_data = pd.read_csv(f"{self.path}/{self.name}.csv", **load_options)
+            time_ms = int((time.time() - start) * 1000)
             raw_data = self._replace_columns(raw_data, column)
+            self.write_metadata(time_ms)
             return copy(raw_data)
         self.loader = loader
+        return self
+
+    def write_metadata(self, time_ms):
+        if self.facade is None:
+            return self
+        self.facede.set_data_loading_time(time_ms)
+        self.facade.set_row_size(len(self.loader().index))
+        self.facade.set_column_size(len(self.loader().columns))
+        self.facade.set_dataset_name(self.name)
         return self
         
     def load_data(self):
@@ -102,9 +116,9 @@ class Disk:
         return data
 
     @classmethod
-    def parse_instruction(cls, properties: dict, call: List[dict]):
+    def parse_instruction(cls, properties: dict, call: List[dict], facade):
         # ignore the properties
-        c = cls(properties.get("path"), properties.get("file"))
+        c = cls(facade, properties.get("path"), properties.get("file"))
         c.column = TabularColumn.from_string(properties.get("reference"))
         for step in call:
             if step["type"] == "load":

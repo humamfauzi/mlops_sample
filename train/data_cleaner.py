@@ -3,6 +3,7 @@ from train.column import TabularColumn
 import pandas as pd
 from copy import copy
 from typing import Optional
+import time
 
 class TabularDataCleaner(ABC):
     @abstractmethod
@@ -24,15 +25,28 @@ class Cleaner(TabularDataCleaner):
     Note: In essence, "lazy call" means delaying the execution of a function or operation until it is explicitly triggered, 
     providing a way to accumulate and manage a series of actions to be performed later as a single unit.
     '''
-    def __init__(self):
+    def __init__(self, facade):
         self.cleaned_data: Optional[pd.DataFrame] = None
         self.call_container = []
+        self.facade = facade
+
     
     def clean_data(self, df: pd.DataFrame) -> pd.DataFrame:
+        start = time.time()
         self.cleaned_data = df.copy()
         for call in self.call_container:
             call()
+        time_ms = int((time.time() - start) * 1000)
+        self.write_metadata(time_ms)
         return copy(self.cleaned_data)
+
+    def write_metadata(self, time_ms):
+        if self.facade is None:
+            return self
+        self.facade.set_data_cleaning_time(time_ms)
+        self.facade.set_row_size_after_cleaning(len(self.cleaned_data.index))
+        self.facade.set_column_size_after_cleaning(len(self.cleaned_data.columns))
+        return self
 
     def remove_columns(self, columns):
         self.call_container.append(lambda: self.cleaned_data.drop(columns, axis=1, inplace=True))
@@ -49,8 +63,8 @@ class Cleaner(TabularDataCleaner):
         return self
 
     @classmethod
-    def parse_instruction(cls, properties: dict, call: list):
-        c = cls()
+    def parse_instruction(cls, facade, properties: dict, call: list):
+        c = cls(facade)
         c.column = TabularColumn.from_string(properties.get("reference"))
         for step in call:
             cols = [c.column.from_enum(col).name for col in step.get("columns", [])]
