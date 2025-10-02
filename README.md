@@ -43,6 +43,12 @@ uv run pytest -x --disable-warnings --ignore=pgdata -vv
 # Run a specific test file
 uv run pytest path/to/test_file.py
 
+# Run all test in a folder
+uv run pytest path/to/test_folder/
+
+# This codes build around modules. It should run use -m flag. How to run train
+uv run python -m train.main <args>
+
 # Activate the virtual environment
 source .venv/bin/activate  # On Linux/Mac
 # or

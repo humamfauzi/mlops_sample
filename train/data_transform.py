@@ -202,7 +202,6 @@ class Transformer:
             print(keeper.column, train_pair.X.columns, keeper.column in train_pair.X.columns)
             if keeper.column in train_pair.X.columns:
                 transformed = keeper.function.transform(pairs.X[keeper.column].to_numpy().reshape(-1, 1))
-                print(">>>>", transformed)
                 pairs.X[keeper.column] = transformed
             else:
                 pairs.y = pd.DataFrame(keeper.function.transform(pairs.y.to_numpy().reshape(-1,1)))
