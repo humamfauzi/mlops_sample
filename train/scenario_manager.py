@@ -1,5 +1,6 @@
 from enum import Enum
 import math
+import time
 from typing import List
 
 from dataclasses import dataclass
@@ -67,6 +68,7 @@ class ScenarioManager:
     def __init__(self, instruction: Instruction):
         self.instruction = instruction
         self.pipeline: List[any] = []
+        self.facade: Facade = None
 
     def construct(self):
         facade = Facade.parse_instruction(self.instruction.repository)
@@ -80,10 +82,13 @@ class ScenarioManager:
                 self.pipeline.append(Transformer.parse_instruction(step.properties, step.call, facade))
             elif step.type == InstructionEnum.MODEL_TRAINER:
                 self.pipeline.append(ModelTrainer.parse_instruction(step.properties, step.call, facade))
+        self.facade = facade
         return self
     def execute(self):
         recurse = None
+        start = time.time()
         for component in self.pipeline:
             recurse = component.execute(recurse)
+        self.facade.set_total_runtime((time.time() - start) * 1000.0)
         return recurse
     

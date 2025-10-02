@@ -89,6 +89,10 @@ class Facade:
         self.repository.new_property(self.current_run_id, f"size.split.{stage}.column", str(ncols))
         return self
 
+    def set_total_runtime(self, time: int):
+        self.repository.new_metric(self.current_run_id, "time_ms.all", time)
+        return self
+
     def set_total_transformation_time(self, time: int):
         self.repository.new_metric(self.current_run_id, "time_ms.transforming.all", time)
         return self

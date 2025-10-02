@@ -52,6 +52,11 @@ class SQLiteRepository:
     def new_metric(self, run_id: int, key: str, value: float):
         with sqlite3.connect(self.name) as conn:
             c = conn.cursor()
+            try:
+                value = round(float(value), 3)
+            except (TypeError, ValueError):
+                # leave value as-is if it can't be converted to float
+                pass
             c.execute('INSERT INTO metrics (run_id, key, value) VALUES (?, ?, ?)', (run_id, key, value))
             conn.commit()
             return c.lastrowid
