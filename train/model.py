@@ -14,6 +14,7 @@ from enum import Enum
 from typing import Optional, List
 from train.sstruct import Pairs
 from sklearn.model_selection import ParameterGrid
+from repositories.struct import ModelObject
 import time
 
 class TabularModel(ABC):
@@ -88,6 +89,12 @@ class ModelWrapper:
         self.facade.tag_as_the_best()
         return self
 
+    def save(self):
+        model_object = ModelObject(filename=f"{self.run_id}-{self.name}", object=self.model)
+        self.facade.save_model(model_object)
+        self.facade.set_model_properties(self.hyperparameters)
+        return self
+
 class ModelTrainer:
     objective_best_model = "best_model"
     objective_fast_model = "fast_model"
@@ -126,6 +133,7 @@ class ModelTrainer:
             self.facade.new_child_run(model.run_id)
             model.train(input_data)
             model.validate(input_data, self.metrics)
+            model.save()
 
         best_model = self.compare_model()
         self.check_model_against_test(best_model, input_data)

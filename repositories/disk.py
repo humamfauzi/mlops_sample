@@ -54,6 +54,7 @@ class Disk:
         
 
     def save_model(self, model: ModelObject):
+        os.makedirs(os.path.join(self.root, "model"), exist_ok=True)
         path = os.path.join(self.root, "model", f"{model.filename}.pkl")
         with open(path, "wb") as f:
             pickle.dump(model.object, f, protocol=pickle.HIGHEST_PROTOCOL)
