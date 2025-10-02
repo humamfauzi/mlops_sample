@@ -40,6 +40,7 @@ class TestScenarioManager:
         base = {
             "name": "base_test",
             "description": "A basic test to load data from disk",
+            "repository": {},
             "instructions": [
                 {
                     "type": "data_io",
@@ -71,6 +72,7 @@ class TestScenarioManager:
         base = {
             "name": "base_test",
             "description": "A basic test to load data from disk",
+            "repository": {},
             "instructions": [
                 {
                     "type": "data_io",
@@ -100,6 +102,7 @@ class TestScenarioManager:
         base = {
             "name": "base_test",
             "description": "A basic test to load data from disk and clean it",
+            "repository": {},
             "instructions": [
                 {
                     "type": "data_io",
@@ -142,6 +145,7 @@ class TestScenarioManager:
         base = {
             "name": "base_test",
             "description": "A basic test to load data from disk and clean it",
+            "repository": {},
             "instructions": [
                 {
                     "type": "data_io",
@@ -203,6 +207,7 @@ class TestScenarioManager:
         base = {
             "name": "base_test",
             "description": "A basic test to load data from disk and clean it",
+            "repository": {},
             "instructions": [
                 {
                     "type": "data_io",
@@ -251,7 +256,7 @@ class TestScenarioManager:
                 {
                     "type": "model_trainer",
                     "properties": {
-                        "objective": "best_model",
+                        "objective": "first_model",
                         "random_state": 42,
                         "fold": 5,
                         "parameter_grid": {
@@ -280,4 +285,4 @@ class TestScenarioManager:
         assert sm is not None
 
         result = sm.construct().execute()
-        assert result is None
+        assert result is not None

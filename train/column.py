@@ -47,6 +47,8 @@ class TabularColumn(ABC):
             return CommodityFlow
         elif name == "sample":
             return SampleEnum
+        elif name == "sample_enum_transformer":
+            return SampleEnumTransformer
         else:
             raise ValueError(f"Cannot find enum with name {name}")
 
@@ -180,3 +182,32 @@ class CommodityFlow(Enum):
 
 
 
+class SampleEnumTransformer(Enum):
+    COLUMN_ID = 1
+    COLUMN_CATEGORICAL = 2
+    COLUMN_NUMERICAL = 3
+    COLUMN_TARGET = 4
+
+    @classmethod
+    def categorical(cls):
+        return [cls.COLUMN_CATEGORICAL.name]
+
+    @classmethod
+    def numerical(cls):
+        return [cls.COLUMN_NUMERICAL.name]
+
+    @classmethod
+    def feature(cls, current_column):
+        alll = cls.numerical() + cls.categorical()
+        return list(set(alll) & set(current_column))
+
+    @classmethod
+    def target(cls):
+        return cls.COLUMN_TARGET.name
+
+    @classmethod
+    def from_enum(cls, e:str):
+        for member in cls:
+            if member.name == e.upper():
+                return member
+        raise ValueError(f"Cannot find enum with name {e}")

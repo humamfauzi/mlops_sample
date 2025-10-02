@@ -13,6 +13,9 @@ class Repository:
     def new_run(self, name: str, experiment_id: str):
         return 1
 
+    def new_child_run(self, name: str, parent_run_id: int, experiment_id: str):
+        return 2
+
     def new_property(self, run_id: int, key: str, value: str):
         return None
 
@@ -20,6 +23,9 @@ class Repository:
         return None
 
     def new_object(self, run_id: int, type: str, url: str):
+        return None
+
+    def find_best_model_within_run(self, parent_run_id: int, metric: str):
         return None
 
 class Object:

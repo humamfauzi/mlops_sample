@@ -41,20 +41,20 @@ class TestDisk:
     @pytest.mark.filterwarnings("ignore::UserWarning")
     def test_initialization(self):
         """Test Disk class initialization with folder path and filename."""
-        disk = Disk(FOLDER, FILENAME)
+        disk = Disk(None, FOLDER, FILENAME)
         assert disk.path == FOLDER 
         assert disk.name == FILENAME
 
     @pytest.mark.filterwarnings("ignore::UserWarning")
     def test_load_dataframe_via_csv(self, sample_csv_path):
         """Test loading CSV file into DataFrame with column name mapping using Enums."""
-        disk = Disk(FOLDER, FILENAME)
+        disk = Disk(None, FOLDER, FILENAME)
         disk.load_dataframe_via_csv(SampleEnum, {})
         df = disk.load_data()
         
         assert isinstance(df, pd.DataFrame)
         assert df.shape == (1, 3)
-        assert list(df.columns) == [SampleEnum.COLUMN_ID, SampleEnum.COLUMN_FEATURE, SampleEnum.COLUMN_TARGET]
+        assert list(df.columns) == [SampleEnum.COLUMN_ID.name, SampleEnum.COLUMN_FEATURE.name, SampleEnum.COLUMN_TARGET.name]
         assert df.iloc[0, 0] == 1
         assert df.iloc[0, 1] == 'hello'
         assert df.iloc[0, 2] == 300
@@ -66,13 +66,13 @@ class TestDisk:
             "ffaster": ["asd", "asd", "bds"],
             "ttarget": [100, 200, 100],
         }
-        disk = Disk(FOLDER, FILENAME)
+        disk = Disk(None, FOLDER, FILENAME)
         disk.raw_data = pd.DataFrame(sample_dict)
         disk.raw_data = disk._replace_columns(disk.raw_data, SampleEnum)
         
-        assert disk.raw_data.columns[0] == SampleEnum.COLUMN_ID
-        assert disk.raw_data.columns[1] == SampleEnum.COLUMN_FEATURE
-        assert disk.raw_data.columns[2] == SampleEnum.COLUMN_TARGET
+        assert disk.raw_data.columns[0] == SampleEnum.COLUMN_ID.name
+        assert disk.raw_data.columns[1] == SampleEnum.COLUMN_FEATURE.name
+        assert disk.raw_data.columns[2] == SampleEnum.COLUMN_TARGET.name
 
     def test_save_data_via_csv(self):
         """Test saving DataFrame to CSV file and verify the saved file contents."""
@@ -84,7 +84,7 @@ class TestDisk:
             "value": [100, 200]
         })
         
-        disk = Disk(FOLDER, output)
+        disk = Disk(None, FOLDER, output)
         disk.save_via_csv()
         disk.save_data(sample_data)
         

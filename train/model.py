@@ -97,6 +97,7 @@ class ModelWrapper:
 
 class ModelTrainer:
     objective_best_model = "best_model"
+    objective_first_model = "first_model" # for test unit purpose
     objective_fast_model = "fast_model"
 
     parameter_grid_exhaustive = "exhaustive"

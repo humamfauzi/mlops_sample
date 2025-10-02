@@ -7,6 +7,8 @@ import repositories.noop as noop
 class Facade:
     @classmethod
     def parse_instruction(cls, config: dict):
+        if len(config) == 0:
+            return cls("sample", noop.Repository(), noop.Object())
         repository = config.get("data", None)
         if repository.get("type") == "sqlite":
             prop = repository.get("properties", {})

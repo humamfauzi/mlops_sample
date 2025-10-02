@@ -118,10 +118,12 @@ class Transformer:
                         )
                     )
             return c
-    
-    def _save_manifest(self, input_data):
-        # TODO: Require some tracking mechanism
-        pass
+
+    def _save_manifest(self, df: pd.DataFrame):
+        if self.facade is None:
+            return self
+        self.facade.set_object_transformation("transformation_manifest", str(df.columns.tolist()))
+        return self
 
     def _split_stage(self, transformed_data: pd.DataFrame):
         # Based on column enums, choose all column that belong to a feature
@@ -184,9 +186,11 @@ class Transformer:
             elif keeper.method == TransformationMethods.APPEND_AND_REMOVE:
                 self._append_and_remove(keeper, train_pair, validation_pair, test_pair)
             loop_time = int((time.time() - start_loop) * 1000)
-            self.facade.set_transformation_time(keeper.name, loop_time)
+            if self.facade is not None:
+                self.facade.set_transformation_time(keeper.name, loop_time)
         time_ms = int((time.time() - start) * 1000)
-        self.facade.set_total_transformation_time(time_ms)
+        if self.facade is not None:
+            self.facade.set_total_transformation_time(time_ms)
         return self
 
     def _replace(self, keeper, train_pair, validation_pair, test_pair):
@@ -194,8 +198,11 @@ class Transformer:
         replace the original column with the transformed column 
         '''
         for pairs in [train_pair, validation_pair, test_pair]:
+
+            print(keeper.column, train_pair.X.columns, keeper.column in train_pair.X.columns)
             if keeper.column in train_pair.X.columns:
                 transformed = keeper.function.transform(pairs.X[keeper.column].to_numpy().reshape(-1, 1))
+                print(">>>>", transformed)
                 pairs.X[keeper.column] = transformed
             else:
                 pairs.y = pd.DataFrame(keeper.function.transform(pairs.y.to_numpy().reshape(-1,1)))
@@ -220,7 +227,7 @@ class Transformer:
             if keeper.column not in pairs.X.columns:
                 raise ValueError(f"column {keeper.column} is not a feature")
             transformed = keeper.function.transform(pairs.X[[keeper.column]])
-            encoded_columns = keeper.function.get_feature_names_out([keeper.column.name])
+            encoded_columns = keeper.function.get_feature_names_out([keeper.column])
             new_columns = pd.DataFrame(transformed, columns=encoded_columns, dtype='int', index=pairs.X.index)
 
             pairs.X = pd.concat([
