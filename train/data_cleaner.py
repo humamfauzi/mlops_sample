@@ -63,7 +63,7 @@ class Cleaner(TabularDataCleaner):
         return self
 
     @classmethod
-    def parse_instruction(cls, facade, properties: dict, call: list):
+    def parse_instruction(cls, properties: dict, call: list, facade):
         c = cls(facade)
         c.column = TabularColumn.from_string(properties.get("reference"))
         for step in call:

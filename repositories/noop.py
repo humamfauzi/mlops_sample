@@ -1,3 +1,5 @@
+from typing import List
+from repositories.struct import TransformationInstruction, TransformationObject, ModelObject
 
 class Repository:
     """Repository stub that silently ignores all write operations."""

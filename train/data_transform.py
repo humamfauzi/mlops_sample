@@ -10,7 +10,6 @@ from sklearn.model_selection import train_test_split
 from train.column import TabularColumn
 from train.sstruct import Pairs, Stage, FeatureTargetPair
 from train.wrapper import ProcessWrapper
-from repositories.dummy import DummyMLflowRepository, Manifest
 from repositories.struct import TransformationObject, TransformationInstruction
 from dataclasses import dataclass, field
 from typing import Optional, List
@@ -38,9 +37,17 @@ class Keeper:
     # reproduced later by the server
     id: str
     name: str
-    columns: List[Enum]
+    column: TabularColumn
     function: any
-    methods: TransformationMethods
+    method: TransformationMethods
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "name": self.name,
+            "column": self.column,
+            "method": self.method,
+        }
 
 class Transformer:
     def __init__(self, facade, column: TabularColumn):
@@ -61,9 +68,9 @@ class Transformer:
                         Keeper(
                             id = f"log-{count:02d}-{col}",
                             name="log",
-                            column=column.from_enum(col),
+                            column=column.from_enum(col).name,
                             function=ProcessWrapper(np.log, np.exp),
-                            methods=TransformationMethods[step["condition"].upper()]
+                            method=TransformationMethods[step["condition"].upper()]
                         )
                     )
             elif step["type"] == "normalization":
@@ -72,9 +79,9 @@ class Transformer:
                         Keeper(
                             id=f"norm-{count:02d}-{col}",
                             name="normalization",
-                            column=column.from_enum(col),
+                            column=column.from_enum(col).name,
                             function=Normalizer(norm='l2'),
-                            methods=TransformationMethods[step["condition"].upper()]
+                            method=TransformationMethods[step["condition"].upper()]
                         )
                     )
             elif step["type"] == "min_max_transformation":
@@ -83,9 +90,9 @@ class Transformer:
                         Keeper(
                             id=f"minmax-{count:02d}-{col}",
                             name="min_max",
-                            column=column.from_enum(col),
+                            column=column.from_enum(col).name,
                             function=MinMaxScaler(),
-                            methods=TransformationMethods[step["condition"].upper()]
+                            method=TransformationMethods[step["condition"].upper()]
                         )
                     )
             elif step["type"] == "one_hot_encoding":
@@ -94,9 +101,9 @@ class Transformer:
                         Keeper(
                             id=f"ohe-{count:02d}-{col}",
                             name="one_hot_encoding",
-                            column=column.from_enum(col),
+                            column=column.from_enum(col).name,
                             function=OneHotEncoder(sparse_output=False, handle_unknown='infrequent_if_exist'),
-                            methods=TransformationMethods.APPEND_AND_REMOVE
+                            method=TransformationMethods.APPEND_AND_REMOVE
                         )
                     )
             elif step["type"] == "standardization":
@@ -105,9 +112,9 @@ class Transformer:
                         Keeper(
                             id=f"std-{count:02d}-{col}",
                             name="standardization",
-                            column=column.from_enum(col),
+                            column=column.from_enum(col).name,
                             function=StandardScaler(),
-                            methods=TransformationMethods[step["condition"].upper()]
+                            method=TransformationMethods[step["condition"].upper()]
                         )
                     )
             return c
@@ -170,11 +177,11 @@ class Transformer:
         start = time.time()
         for keeper in self.keepers:
             start_loop = time.time()
-            if keeper.methods == TransformationMethods.REPLACE:
+            if keeper.method == TransformationMethods.REPLACE:
                 self._replace(keeper, train_pair, validation_pair, test_pair)
-            elif keeper.methods == TransformationMethods.APPEND:
+            elif keeper.method == TransformationMethods.APPEND:
                 self._append(keeper, train_pair, validation_pair, test_pair)
-            elif keeper.methods == TransformationMethods.APPEND_AND_REMOVE:
+            elif keeper.method == TransformationMethods.APPEND_AND_REMOVE:
                 self._append_and_remove(keeper, train_pair, validation_pair, test_pair)
             loop_time = int((time.time() - start_loop) * 1000)
             self.facade.set_transformation_time(keeper.name, loop_time)

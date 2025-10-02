@@ -24,17 +24,17 @@ class Disk:
             raw_data = pd.read_csv(f"{self.path}/{self.name}.csv", **load_options)
             time_ms = int((time.time() - start) * 1000)
             raw_data = self._replace_columns(raw_data, column)
-            self.write_metadata(time_ms)
+            self.write_metadata(raw_data, time_ms)
             return copy(raw_data)
         self.loader = loader
         return self
 
-    def write_metadata(self, time_ms):
+    def write_metadata(self, raw_data, time_ms):
         if self.facade is None:
             return self
-        self.facede.set_data_loading_time(time_ms)
-        self.facade.set_row_size(len(self.loader().index))
-        self.facade.set_column_size(len(self.loader().columns))
+        self.facade.set_data_loading_time(time_ms)
+        self.facade.set_row_size(len(raw_data.index))
+        self.facade.set_column_size(len(raw_data.columns))
         self.facade.set_dataset_name(self.name)
         return self
         

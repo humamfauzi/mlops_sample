@@ -1,6 +1,5 @@
-import sqlite3
-import uuid
-
+import math
+from random import random
 from repositories.sqlite import SQLiteRepository
 from repositories.disk import Disk
 import repositories.noop as noop
@@ -20,9 +19,10 @@ class Facade:
             o = Disk(**prop)
         else:
             raise ValueError(f"Unknown object store type: {objectt.get('type')}")
-        return cls(r, o)
+        experiment_id = config.get("experiment_id", "sample")
+        return cls(experiment_id, r, o)
 
-    def __init__(self,experiment_id: str, repository=noop.Repository(), object_store=noop.Object()):
+    def __init__(self, experiment_id: str, repository=noop.Repository(), object_store=noop.Object()):
         self.experiment_id = experiment_id
         self.repository = repository
         self.object_store = object_store
@@ -38,6 +38,10 @@ class Facade:
         new_run_id = self.repository.new_run(name, self.experiment_id)
         self.current_run_id = new_run_id
         return self
+
+    def generate_run_id(self):
+        source = "ABCDEFGHIJKLMNOPQRSTUVWXYZ12345678890"
+        return ''.join([source[math.floor(random()*len(source))] for _ in range(6)])
 
     def new_child_run(self, name: str):
         new_run_id = self.repository.new_child_run(name, self.current_run_id, self.experiment_id)
@@ -118,5 +122,31 @@ class Facade:
     def load_model(self, id: str):
         return self.object_store.load_model(id)
 
-    
-    
+    def set_metric(self, stage, metric_name: str, value: float):
+        self.repository.new_metric(self.current_child_run_id, f"validation.{stage}.{metric_name}", value)
+        return self
+
+    def set_validation_time(self, stage: str, time: float):
+        self.repository.new_metric(self.current_child_run_id, f"time_ms.validation.{stage}", time)
+        return self
+
+    def set_training_time(self, time: float):
+        self.repository.new_metric(self.current_child_run_id, f"time_ms.train", time)
+        return self
+
+    def set_model_properties(self, options: dict):
+        for k, v in options.items():
+            self.repository.new_property(self.current_child_run_id, f"property.{k}", str(v))
+        return self
+
+    def set_model_hyperparameters(self, options: dict):
+        for k, v in options.items():
+            self.repository.new_property(self.current_child_run_id, f"parameter.{k}", str(v))
+        return self
+
+    def find_best_model(self, metric: str):
+        return self.repository.find_best_model_within_run(self.current_run_id, f"validation.valid.{metric}")
+
+    def tag_as_the_best(self):
+        self.repository.new_tag(self.current_child_run_id, "level", "best")
+        return self

@@ -1,5 +1,6 @@
 import random
 import pprint
+from time import time
 import numpy as np
 
 from abc import ABC, abstractmethod
@@ -13,6 +14,7 @@ from enum import Enum
 from typing import Optional, List
 from train.sstruct import Pairs
 from sklearn.model_selection import ParameterGrid
+import time
 
 class TabularModel(ABC):
     @abstractmethod
@@ -29,78 +31,62 @@ class ModelWrapper:
     So all the model result, hyperparameters, and training properties are hold in this class
     not in the trainer
     """
-    def __init__(self, name, model, hyperparameters):
+    def __init__(self, name, model, hyperparameters, run_id, facade):
         self.name = name
         self.model = model
         self.hyperparameters = hyperparameters
-        self.metrics = {}
-        self.properties = {}
-        self.tag = {}
-    
-    def save_metrics(self, metrics_name:str, metrics_value: float):
-        self.metrics[metrics_name] = metrics_value
-
-    def save_properties(self, name: str, value):
-        self.properties[name] = value
-
-    def save_tag(self, name: str, value: str):
-        self.tag[name] = value
+        self.facade = facade
+        self.run_id = run_id
 
     def train(self, pairs: Pairs):
+        start = time.time()
         if not isinstance(pairs, Pairs):
             raise TypeError("Input data must be of type Pairs")
         self.model.fit(pairs.train.x_array(), np.array(pairs.train.y).reshape(-1,))
+        end = time.time()
+        duration_ms = (end - start) * 1000.0
+        self.facade.set_training_time(duration_ms)
         return self
 
     def validate(self, pairs: Pairs, metrics: List[str]):
         if not isinstance(pairs, Pairs):
             raise TypeError(f"Input data must be of type Pairs but get {type(pairs)}")
         y_pred = self.model.predict(pairs.valid.x_array())
+        mm = self.metric_map()
+        pairs = {"train": pairs.train, "valid": pairs.valid}
         for metric in metrics:
-            if metric == "mse":
-                for stage in ["train", "valid"]:
-                    if stage == "train":
-                        y_pred = self.model.predict(pairs.train.x_array())
-                        mse = mean_squared_error(pairs.train.y, y_pred)
-                        self.save_metrics("train_mse", mse)
-                    else:
-                        y_pred = self.model.predict(pairs.valid.x_array())
-                        mse = mean_squared_error(pairs.valid.y, y_pred)
-                        self.save_metrics("valid_mse", mse)
-            elif metric == "rmse":
-                for stage in ["train", "valid"]:
-                    if stage == "train":
-                        y_pred = self.model.predict(pairs.train.x_array())
-                        rmse = np.sqrt(mean_squared_error(pairs.train.y, y_pred))
-                        self.save_metrics("train_rmse", rmse)
-                    else:
-                        y_pred = self.model.predict(pairs.valid.x_array())
-                        rmse = np.sqrt(mean_squared_error(pairs.valid.y, y_pred))
-                        self.save_metrics("valid_rmse", rmse)
+            for stage in ["train", "valid"]:
+                start = time.time()
+                if metric in mm:
+                    y_pred = self.model.predict(pairs[stage].x_array())
+                    value = mm[metric](pairs[stage].y, y_pred)
+                    duration_ms = (time.time() - start) * 1000.0
+                    self.facade.set_validation_time(stage, duration_ms)
+                    self.facade.set_metric(stage, metric, value)
         return self
+
+    def metric_map(self):
+        return {
+            "mse": mean_squared_error,
+            "rmse": lambda y_true, y_pred: np.sqrt(mean_squared_error(y_true, y_pred))
+        }
 
     def test(self, pairs: Pairs, metrics: List[str]):
         if not isinstance(pairs, Pairs):
             raise TypeError(f"Input data must be of type Pairs but get {type(pairs)}")
+        start = time.time()
         y_pred = self.model.predict(pairs.test.x_array())
+        mm = self.metric_map()
         for metric in metrics:
-            if metric == "mse":
-                mse = mean_squared_error(pairs.test.y, y_pred)
-                self.save_metrics("test_mse", mse)
-            elif metric == "rmse":
-                rmse = np.sqrt(mean_squared_error(pairs.test.y, y_pred))
-                self.save_metrics("test_rmse", rmse)
+            if metric in mm:
+                value = mm[metric](pairs.test.y, y_pred)
+                self.facade.set_metric("test", metric, value)
+        self.facade.set_validation_time("test", (time.time() - start) * 1000.0)
         return self
 
-    def log_model(self):
-        complete_log = {
-            "name": self.name,
-            "hyperparameters": self.hyperparameters,
-            "metrics": self.metrics,
-            "properties": self.properties,
-            "tag": self.tag
-        }
-        pprint.pprint(complete_log)
+    def set_as_the_best(self):
+        self.facade.tag_as_the_best()
+        return self
 
 class ModelTrainer:
     objective_best_model = "best_model"
@@ -110,12 +96,14 @@ class ModelTrainer:
     parameter_grid_random = "random"
 
     def __init__(self, 
+            facade,
             random_state=42,
             objective="best_model",
             fold=5,
             parameter_grid="exhaustive",
             metrics=[]
         ):
+        self.facade = facade
         self.random_state = random_state
         self.objective = objective
         self.parameter_grid = parameter_grid
@@ -135,13 +123,13 @@ class ModelTrainer:
         if not isinstance(input_data, Pairs):
             raise TypeError("Input data must be of type Pairs")
         for model in self.models:
+            self.facade.new_child_run(model.run_id)
             model.train(input_data)
             model.validate(input_data, self.metrics)
 
         best_model = self.compare_model()
         self.check_model_against_test(best_model, input_data)
-        best_model.log_model()
-        return 
+        return self
 
     def add_model(self, call: dict):
         gm = self.generate_model(call["model_type"], call["hyperparameters"], self.parameter_grid["type"])
@@ -176,7 +164,7 @@ class ModelTrainer:
             param_grid = ParameterGrid(hyperparameters)
             for pg in list(param_grid):
                 model = model_class(**pg)
-                mw = ModelWrapper(model_type, model, pg)
+                mw = ModelWrapper(model_type, model, pg, self.facade.generate_run_id(), self.facade)
                 models.append(mw)
         return models
 
@@ -184,23 +172,20 @@ class ModelTrainer:
         if len(self.models) == 0:
             raise ValueError("No model to compare")
         if self.objective == self.objective_best_model:
-            best_model = None
-            best_metric = float("inf")
-            for model in self.models:
-                if "valid_mse" in model.metrics:
-                    if model.metrics["valid_mse"] < best_metric:
-                        best_metric = model.metrics["valid_mse"]
-                        best_model = model
-                if "valid_rmse" in model.metrics:
-                    if model.metrics["valid_rmse"] < best_metric:
-                        best_metric = model.metrics["valid_rmse"]
-                        best_model = model
-            best_model.save_tag("level", "best")
+            id = self.facade.find_best_model("rmse")
+            best_model = self.find_model_by_id(id)
+            best_model.set_as_the_best()
             return best_model
         else:
             # TODO implement fast model selection
             pass
         return self.models[0]
+
+    def find_model_by_id(self, id: str) -> Optional[ModelWrapper]:
+        for model in self.models:
+            if model.run_id == id:
+                return model
+        raise ValueError(f"Model with id {id} not found")
 
     def check_model_against_test(self, best_model: ModelWrapper, input_data: Pairs):
         if best_model is None:

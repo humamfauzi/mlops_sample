@@ -179,4 +179,7 @@ cython_debug/
 *.code-workspace
 
 # SQLite database files
-example.db
+*.db
+
+# temporary files
+temp/*

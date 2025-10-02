@@ -2,8 +2,10 @@ import sqlite3
 import uuid
 
 class SQLiteRepository:
-    def __init__(self, name='example.db'):
+    def __init__(self, name='example.db', migrate=False):
         self.name = name
+        if migrate:
+            self.migrate()
     """
     Communication layer with SQLite database for storing and retrieving experiments, runs, tags, metrics, objects, properties, and audit logs.
     """
@@ -34,9 +36,18 @@ class SQLiteRepository:
     def new_tag(self, run_id: int, key: str, value: str):
         with sqlite3.connect(self.name) as conn:
             c = conn.cursor()
-            c.execute('INSERT INTO tags (run_id, key, value) VALUES (?, ?, ?)', (run_id, key, value))
+            c.execute('SELECT id FROM tags WHERE run_id = ? AND key = ?', (run_id, key))
+            row = c.fetchone()
+            if row:
+                # update existing tag
+                c.execute('UPDATE tags SET value = ? WHERE id = ?', (value, row[0]))
+                value =  row[0]
+            else:
+                # insert new tag
+                c.execute('INSERT INTO tags (run_id, key, value) VALUES (?, ?, ?)', (run_id, key, value))
+                value = c.lastrowid
             conn.commit()
-            return c.lastrowid
+            return value
 
     def new_metric(self, run_id: int, key: str, value: float):
         with sqlite3.connect(self.name) as conn:
@@ -63,7 +74,7 @@ class SQLiteRepository:
         with sqlite3.connect(self.name) as conn:
             c = conn.cursor()
             query = '''
-                SELECT r.id, m.value
+                SELECT r.name
                 FROM runs r
                 JOIN metrics m ON r.id = m.run_id
                 JOIN tags t ON r.id = t.run_id
@@ -81,7 +92,7 @@ class SQLiteRepository:
         with sqlite3.connect(self.name) as conn:
             c = conn.cursor()
             query = '''
-                SELECT r.id, m.value
+                SELECT r.name
                 FROM runs r
                 JOIN metrics m ON r.id = m.run_id
                 WHERE r.parent_id = ? AND m.key = ?
@@ -128,7 +139,7 @@ class SQLiteRepository:
             results = c.fetchall()
             return {type: url for type, url in results}
 
-    def migrate():
+    def migrate(self):
         with sqlite3.connect(self.name) as conn:
             c = conn.cursor()
             # Enable foreign key support

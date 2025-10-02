@@ -6,11 +6,14 @@
         "experiment_id": "experiment_001",
         "data": {
             "type": "sqlite",
-            "properties": { "name": "mlops_sample.db" }
+            "properties": { 
+                "name": "example.db",
+                "migrate": true
+            }
         },
         "object": {
             "type": "disk",
-            "properties": { "path": "temp/mlops" }
+            "properties": { "root": "temp/mlops" }
         }
     },
     "instructions": [
@@ -25,7 +28,7 @@
             "call": [
                 {
                     "type": "load",
-                    "n_rows": 1000000
+                    "n_rows": 1000
                 }
             ]
         },

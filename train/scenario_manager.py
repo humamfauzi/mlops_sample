@@ -1,4 +1,5 @@
 from enum import Enum
+import math
 from typing import List
 
 from dataclasses import dataclass
@@ -26,7 +27,8 @@ class InstructionFactory:
         return Instruction(
             name=instruction["name"],
             description=instruction["description"],
-            instructions=instructions
+            instructions=instructions,
+            repository=instruction["repository"]
         )
 
 class InstructionEnum(Enum):
@@ -68,6 +70,7 @@ class ScenarioManager:
 
     def construct(self):
         facade = Facade.parse_instruction(self.instruction.repository)
+        facade.new_run(facade.generate_run_id())
         for step in self.instruction.instructions:
             if step.type == InstructionEnum.DATA_IO:
                 self.pipeline.append(Disk.parse_instruction(step.properties, step.call, facade))
