@@ -10,6 +10,20 @@ register-dvc-remote:
 	dvc remote modify --local origin secret_access_key ${AWS_SECRET_KEY}
 	echo "setting dvc remote credential"
 
+
+build-train-module:
+	@echo "Building PyInstaller binary for train/main.py..."
+	mkdir -p dist
+	uv run pyinstaller --onefile --name train_module --distpath ./dist --clean train/main.py
+
+clean-exe:
+	@echo "Cleaning PyInstaller build artifacts..."
+	@rm -rf build/pyinstaller dist/pyinstaller build mlops_train.spec
+
+run-exe: build-exe
+	@echo "Running built binary..."
+	./dist/pyinstaller/mlops_train
+
 # building docker management
 # building docker compose that contain
 # - postgres for data storing

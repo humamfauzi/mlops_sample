@@ -25,22 +25,7 @@ def list_all_possible_instructions():
     print("Available instructions:", pprint(instructions))
 
 def call_instruction(instruction_name: str):
-    folder_path = "train_config"
-    files = os.listdir(folder_path)
-    json_files = [f for f in files if f.endswith('.json')]
-    if not json_files:
-        print("No JSON files found in the train_config folder.")
-        return
-    
-    instruction = None
-    for file_name in json_files:
-        file_path = os.path.join(folder_path, file_name)
-        with open(file_path, 'r') as f:
-            jf = json.load(f) 
-            if jf["name"] == instruction_name:
-                instruction = jf
-                break
-
+    instruction = json.load(open(instruction_name, 'r'))
     if instruction is None:
         print(f"Instruction '{instruction_name}' not found.")
         return
@@ -55,14 +40,13 @@ def call_instruction(instruction_name: str):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Run different functions.")
     parser.add_argument("--instruction_list", help="list all available instructions", action="store_true")
-    parser.add_argument("config_name", help="Name of the config file (e.g., base_train)")
+    parser.add_argument("config_path", help="Path to the config file (e.g., train_config/base_train.json)")
     args = parser.parse_args()
-    print(args.config_name)
 
     if args.instruction_list:
         list_all_possible_instructions()
-    elif args.config_name:
-        call_instruction(args.config_name)
+    elif args.config_path:
+        call_instruction(args.config_path)
     else:
         print("Please provide an instruction or use --instruction_list to see available instructions.")
 
