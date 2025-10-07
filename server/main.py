@@ -6,11 +6,11 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse
-from server.model import ModelServer
+from server.model import Model
 import server.response as response
-from repositories.mlflow import Repository
 from typing import Optional
 from contextlib import asynccontextmanager
+from repositories.repo import Facade
 
 origins = [
     "http://localhost:3000",
@@ -34,12 +34,14 @@ class TimeoutMiddleware(BaseHTTPMiddleware):
             )
 
 # a singleton model provider
-model: Optional[ModelServer] = None
+# the model would be loaded. Once loaded, it would be accessed via API
+model: Optional[Model] = None
 
 @asynccontextmanager
 async def lifespan(app):
     global model
-    model = ModelServer(repository).load()
+    repo = Facade.parse_instruction({}) # placeholder
+    model = Model(repo).load()
     try:
         yield
     finally:

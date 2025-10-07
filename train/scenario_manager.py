@@ -9,8 +9,7 @@ from train.data_cleaner import Cleaner
 from train.data_transform import Transformer
 from train.model import ModelTrainer
 from repositories.repo import Facade
-
-
+from repositories.repo import InferenceInstruction
 
 class InstructionFactory:
     def __init__(self):
@@ -84,11 +83,13 @@ class ScenarioManager:
                 self.pipeline.append(ModelTrainer.parse_instruction(step.properties, step.call, facade))
         self.facade = facade
         return self
+
     def execute(self):
         recurse = None
         start = time.time()
         for component in self.pipeline:
             recurse = component.execute(recurse)
         self.facade.set_total_runtime((time.time() - start) * 1000.0)
+        self.facade.generate_inference_instruction()
         return recurse
     

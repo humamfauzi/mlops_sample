@@ -3,6 +3,8 @@ from random import random
 from repositories.sqlite import SQLiteRepository
 from repositories.disk import Disk
 import repositories.noop as noop
+from dataclasses import dataclass
+from typing import List
 
 class Facade:
     @classmethod
@@ -180,3 +182,31 @@ class Facade:
         if model_path is None:
             raise ValueError(f"No model path found for best model {best} under parent run {parent_run_id}")
         return self.object_store.load_model(model_path)
+
+    def get_all_published_candidates(self, experiment_id: str):
+        return self.repository.get_all_published_candidates(experiment_id)
+
+    def load_inference(self, model_id: int):
+        return self.object_store.load_model(model_id)
+
+
+
+@dataclass
+class InferenceModelInstruction:
+    id: str # it is a 6 random string of all caps
+
+@dataclass
+class Transformation:
+    id: str
+
+@dataclass
+class InferenceTransformationInstruction:
+    # available column used for parsing from query string to
+    # data transformation input
+    available_column: List[str]
+    steps: List[Transformation]
+
+@dataclass
+class InferenceInstruction:
+    model: InferenceModelInstruction
+    transformation: InferenceTransformationInstruction

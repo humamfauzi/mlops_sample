@@ -144,6 +144,19 @@ class SQLiteRepository:
             results = c.fetchall()
             return {type: url for type, url in results}
 
+    def get_all_published_candidates(self, experiment_id: str):
+        with sqlite3.connect(self.name) as conn:
+            c = conn.cursor()
+            query = '''
+                SELECT r.id, r.name
+                FROM runs r
+                JOIN tags t ON r.id = t.run_id
+                WHERE r.experiment_id = ? AND t.key = 'status.deployment' AND t.value = 'ready'
+            '''
+            c.execute(query, (experiment_id,))
+            results = c.fetchall()
+            return [{"id": id, "name": name} for id, name in results]
+
     def migrate(self):
         with sqlite3.connect(self.name) as conn:
             c = conn.cursor()

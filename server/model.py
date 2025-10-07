@@ -382,6 +382,21 @@ class ModelServer:
 from repositories.repo import Facade 
 
 class Model:
-    def __init__(self, repository: Facade):
+    def __init__(self, repository: Facade, experiment_id: str):
         self.repository = repository
+        self.experiment_id = experiment_id
+        self.cache = {}
+
+    def list(self):
+        pcs = self.repository.get_all_published_candidates()
+        for pc in pcs:
+            instructions = self.repository.load_inference(pc["id"])
+            self.cache[pc["name"]] = 
+        pass
+
+    def metadata(self, model_name: str):
+        pass
+
+    def inference(self, model_name: str, input: Dict[str, Any]):
+        pass
     

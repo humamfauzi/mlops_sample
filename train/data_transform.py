@@ -40,6 +40,7 @@ class Keeper:
     column: TabularColumn
     function: any
     method: TransformationMethods
+    reverse_transform: bool
 
     def to_dict(self):
         return {
@@ -54,6 +55,55 @@ class Transformer:
         self.column = column
         self.keepers = []
         self.facade = facade
+
+    def keeper_builder(self, column, col, condition, count):
+        c = column.from_enum(col).name
+
+        if col == column.target():
+            inverse_transform = True
+
+        return {
+            "log_transformation": lambda _: Keeper(
+                id = f"log-{count:02d}-{col}",
+                name="log",
+                column=c,
+                function=ProcessWrapper(np.log, np.exp),
+                method=TransformationMethods[condition]
+                inverse_transform=inverse_transform
+            ),
+            "normalization": lambda _: Keeper(
+                id=f"norm-{count:02d}-{col}",
+                name="normalization",
+                column=c,
+                function=Normalizer(norm='l2'),
+                method=TransformationMethods[condition],
+                inverse_transform=inverse_transform
+            ),
+            "min_max_transformation": lambda _: Keeper(
+                id=f"minmax-{count:02d}-{col}",
+                name="min_max",
+                column=c,
+                function=MinMaxScaler(),
+                method=TransformationMethods[condition],
+                inverse_transform=inverse_transform,
+            ),
+            "one_hot_encoding": lambda _: Keeper(
+                id=f"ohe-{count:02d}-{col}",
+                name="one_hot_encoding",
+                column=c,
+                function=OneHotEncoder(sparse_output=False, handle_unknown='infrequent_if_exist'),
+                method=TransformationMethods.APPEND_AND_REMOVE,
+                inverse_transform=inverse_transform,
+            ),
+            "standardization": lambda _: Keeper(
+                id=f"std-{count:02d}-{col}",
+                name="standardization",
+                column=c,
+                function=StandardScaler(),
+                method=TransformationMethods[condition],
+                inverse_transform=inverse_transform,
+            ),
+        }
 
     @classmethod
     def parse_instruction(cls, properties: dict, call: List[dict], facade):
@@ -122,7 +172,7 @@ class Transformer:
     def _save_manifest(self, df: pd.DataFrame):
         if self.facade is None:
             return self
-        self.facade.set_object_transformation("transformation_manifest", str(df.columns.tolist()))
+        self.facade.set_object_transformation("transformation.allowed_columns", str(df.columns.tolist()))
         return self
 
     def _split_stage(self, transformed_data: pd.DataFrame):

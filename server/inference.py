@@ -12,9 +12,8 @@ class InferenceManager:
         pass
 
     @classmethod
-    def parse_instruction(cls, config: dict):
-        repository = Facade.parse_instruction(config.get("repository", {}))
-        pm = repository.get_all_published_models()
+    def parse_instruction(cls, repository: Facade, config: dict):
+        pm = repository.get_all_published_models(config.get("experiment_id", "sample"))
         c = cls(repository)
         for m in pm:
             c.inferences[m.id] = Inference.parse_instruction(m)
@@ -30,10 +29,11 @@ from server.transformation import Transformation
 from server.model import Model
 class Inference:
     def __init__(self, transformation: Transformation, model: Model):
-        self.transformation = transformation
-        self.model = model
+        self.transformation: Transformation = transformation
+        self.model: Model = model
 
     def infer(self, data: dict):
+        data = self.transformation.parse_input(data)
         transformed = self.transformation.transform(data)
         result = self.model.infer(transformed)
         inverse = self.transformation.inverse_transform(result)
