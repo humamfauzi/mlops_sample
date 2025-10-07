@@ -213,4 +213,5 @@ class SQLiteRepository:
             conn.commit()
 
 if __name__ == "__main__":
-    SQLiteRepository.migrate()
+    # manual call for migration
+    SQLiteRepository(migrate=True)

@@ -12,8 +12,8 @@
             }
         },
         "object": {
-            "type": "disk",
-            "properties": { "root": "temp/mlops" }
+            "type": "s3",
+            "properties": { "bucket_name": "humamf-artifacts" }
         }
     },
     "instructions": [
@@ -28,7 +28,7 @@
             "call": [
                 {
                     "type": "load",
-                    "n_rows": 1000
+                    "n_rows":1000
                 }
             ]
         },
@@ -70,16 +70,16 @@
             },
             "call": [
                 {
-                    "model_type": "linear_regression",
-                    "hyperparameters": {}
-                },
-                {
                     "model_type": "random_forest_regressor",
                     "hyperparameters": {
                         "n_estimators": [50, 100],
                         "max_depth": [5, 10],
                         "random_state": [42]
                     }
+                },
+                {
+                    "model_type": "linear_regression",
+                    "hyperparameters": {}
                 },
                 {
                     "model_type": "gradient_boosting_regressor",

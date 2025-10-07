@@ -379,4 +379,9 @@ class ModelServer:
             return None
         return model.infer(data)
 
+from repositories.repo import Facade 
+
+class Model:
+    def __init__(self, repository: Facade):
+        self.repository = repository
     

@@ -10,9 +10,7 @@ from server.model import ModelServer
 import server.response as response
 from repositories.mlflow import Repository
 from typing import Optional
-
-TRACKER_PATH = os.getenv("TRACKER_PATH") 
-ARTIFACT_DIR="server"
+from contextlib import asynccontextmanager
 
 origins = [
     "http://localhost:3000",
@@ -35,6 +33,19 @@ class TimeoutMiddleware(BaseHTTPMiddleware):
                 {"detail": "Request timeout exceeded"}, status_code=504
             )
 
+# a singleton model provider
+model: Optional[ModelServer] = None
+
+@asynccontextmanager
+async def lifespan(app):
+    global model
+    model = ModelServer(repository).load()
+    try:
+        yield
+    finally:
+        # optional cleanup on shutdown
+        model = None
+
 app = FastAPI()
 app.add_middleware(
     CORSMiddleware,
@@ -46,31 +57,23 @@ app.add_middleware(
 
 # Add timeout middleware to limit the request
 app.add_middleware(TimeoutMiddleware, timeout=3) 
-
-# a singleton model provider
-CFS2017_MODEL_REPOSITORY: Optional[ModelServer] = None
-@app.on_event("startup")
-async def startup_event():
-    global CFS2017_MODEL_REPOSITORY
-    repository = Repository(TRACKER_PATH, "humamtest_lazycall")
-    CFS2017_MODEL_REPOSITORY = ModelServer(repository).load()
+lifespan(app)
 
 @app.get("/health")
 async def health():
-    return JSONResponse(content={"message": "ok"}, status_code=200)
+    return response.HealthResponse(status="ok").to_json_response()
 
 # Primary endpoint for getting all available model for CFS 2017 problems
 @app.get("/cfs2017")
 async def cfs2017():
-    all_model = CFS2017_MODEL_REPOSITORY.list()
+    all_model = model.list()
     return response.ListResponse(message="success", data=all_model).to_json_response()
 
 # Primary endpoint for getting all metadata about the model
 @app.get("/cfs2017/{model}/metadata")
 async def cfs2017ModelMetadata(request: Request):
     model = request.path_params["model"]
-    dd = CFS2017_MODEL_REPOSITORY.metadata(model_name=model)
-    print("metadata", dd)
+    dd = cfs2017.metadata(model_name=model)
     return response.MetadataReponse(
         message="success", 
         metadata=dd["metadata"], 
@@ -85,8 +88,8 @@ async def cfs2017ModelInference(request: Request):
     # filter first so any thing that goes to inference model is only
     # what the model requires and discard any extra input
     q = request.query_params
-    filtered, message = CFS2017_MODEL_REPOSITORY.validate_input(model, q)
+    filtered, message = cfs2017.validate_input(model, q)
     if message != "":
         return response.ErrorResponse(code=401, message=message).to_json_response()
-    result = CFS2017_MODEL_REPOSITORY.infer(model, filtered)
+    result = cfs2017.infer(model, filtered)
     return response.InferenceResponse(message="success", output=result).to_json_response()

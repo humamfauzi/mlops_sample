@@ -140,7 +140,7 @@ class Transformer:
         Xtr, Xt, ytr, yt = train_test_split(
                 train,
                 test,
-                test_size=0.2,
+                test_size=0.1,
                 random_state=42,
         )
         Xv, Xte, yv, yte = train_test_split(
@@ -198,8 +198,6 @@ class Transformer:
         replace the original column with the transformed column 
         '''
         for pairs in [train_pair, validation_pair, test_pair]:
-
-            print(keeper.column, train_pair.X.columns, keeper.column in train_pair.X.columns)
             if keeper.column in train_pair.X.columns:
                 transformed = keeper.function.transform(pairs.X[keeper.column].to_numpy().reshape(-1, 1))
                 pairs.X[keeper.column] = transformed

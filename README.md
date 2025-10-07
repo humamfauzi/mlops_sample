@@ -237,3 +237,23 @@ server can retrieve any model registered in ML FLow instance. Currently, it only
 user input to model input. This run can be tagged so we can program which model a server should take.
 
 
+# Available Plan
+1. *PIPELINE CHECK* small amount of data; use KNN, Tree model, linear regression, and bagging model like XGBoost and AdaBoost.
+2. *BASELINE* Use the shipment value mean as a baseline prediction
+3. *LOG_TRANSFORMED* Use shipment weight and shipment value; both log transformed.
+4. *NAICS_OHE* Use NAICS one hot encode, shipment weight and shipment value; both log transformed
+5. *NORMALIZED* Same as above but now after logged, it should also be normalized
+6. *HAZMAT_EXPORT_OHE* Use Hazmat, Export both one hot encode and NAICS one hot encode, shipment weight and shipment value.
+7. *EXPORT_REFRIGATED_OHE* Use Export, Hazmat, Export destination, Refrigated, NAICS and shipment weight and shipment value
+8. *SHIPMENT_DISTANCE_LOG_NORM* Use Export, Hazmat, Export destination, Refrigated, NAICS and shipment weight, and shipment distance, and shipment value. All numerical value are logged and normalized.
+9. *MODE_OHE* Use Export, Hazmat, Export Destination, Mode, Refrigated, NAICS, shipment weight and shipment distance, and shipment value. All numerical value are
+logged and normalized.
+10. *INTERSTATE* Add new column called `is_interstate`, only checked if the origin and destination have different value.
+11. *FREQUENCY_ORG_DEST* Use the both frequency and mean as origin and destination so we add four more columns and drop all the origin and destination related table. Add weight and shipment value.
+12. Combine 10 and 11
+
+# Plan Guide
+1. Use the first plan for testing only; making sure the pipeline works
+2. Use plan 2 as the baseline; this is the minimum we need to beat
+3. Use plan 3 to see how weight and value related
+4. Use plan 4 to see how NAICS related and how well its contribute compared to plan 3

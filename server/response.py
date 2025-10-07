@@ -4,47 +4,6 @@ from starlette.responses import JSONResponse
 from abc import ABC, abstractmethod
 import server.model as model
 
-# How to use the data class for representing response message
-# @app.get("/cfs2017")
-# async def cfs2017(request: Request):
-#     models = [
-#         ModelItem(value="MOD-001", display="Dummy Model 1"),
-#         ModelItem(value="MOD-002", display="Dummy Model 2")
-#     ]
-#     response = ModelListResponse(message="", data=models)
-#     return JSONResponse(
-#         status_code=200,
-#         content=response.to_dict()
-#     )
-# 
-# @app.get("/cfs2017/{model}/metadata")
-# async def cfs2017ModelMetadata(request: Request):
-#     model = request.path_params["model"]
-#     
-#     metadata = [
-#         MetadataItem(key="name", display="Model Name", value="Dummy Model"),
-#         MetadataItem(key="train_accuracy", display="Train Accuracy", value=0.8)
-#         # Add more metadata items as needed
-#     ]
-#     
-#     inputs = [
-#         InputItem(type="categorical", key="origin", display="Origin", 
-#                  enumeration=["USA", "Europe", "Japan"]),
-#         # Add more input items as needed
-#     ]
-#     
-#     content = ModelMetadataContent(
-#         description="This is a dummy model. Use this structure as a reference.",
-#         metadata=metadata,
-#         input=inputs
-#     )
-#     
-#     response = ModelMetadataResponse(message="", data=content)
-#     return JSONResponse(
-#         status_code=200,
-#         content=response.to_dict()
-#     )
-
 class Response(ABC):
     """Base class for all response classes"""
     @abstractmethod 
@@ -60,6 +19,17 @@ class Response(ABC):
     Convert the response to a JSONResponse format.
     This method should be implemented by subclasses to provide
     '''
+
+@dataclass
+class HealthResponse(Response):
+    """Response structure for the health endpoint"""
+    status: str
+    def to_dict(self) -> Dict[str, str]:
+        return {
+            "status": self.status
+        }
+    def to_json_response(self) -> JSONResponse:
+        return JSONResponse(status_code=200, content=self.to_dict())
 
 @dataclass
 class ListResponse(Response):
@@ -84,8 +54,6 @@ class MetadataReponse(Response):
     input: List[model.Input]
     description: str
     def to_dict(self) -> Dict[str, Any]:
-        print("metadata", self.metadata)
-        print("input", self.input)
         return {
             "message": self.message,
             "data": {
@@ -99,6 +67,7 @@ class MetadataReponse(Response):
         return JSONResponse(status_code=200, content=self.to_dict())
 
 _ = MetadataReponse(message="", metadata=[], input=[], description="")
+
 @dataclass
 class InferenceResponse(Response):
     """Content structure for inference response"""

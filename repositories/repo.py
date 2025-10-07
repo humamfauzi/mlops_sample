@@ -19,6 +19,10 @@ class Facade:
         if objectt.get("type") == "disk":
             prop = objectt.get("properties", {})
             o = Disk(**prop)
+        elif objectt.get("type") == "s3":
+            from repositories.s3 import S3
+            prop = objectt.get("properties", {})
+            o = S3(**prop)
         else:
             raise ValueError(f"Unknown object store type: {objectt.get('type')}")
         experiment_id = config.get("experiment_id", "sample")
@@ -39,6 +43,10 @@ class Facade:
     def new_run(self, name: str):
         new_run_id = self.repository.new_run(name, self.experiment_id)
         self.current_run_id = new_run_id
+        return self
+
+    def set_config_name(self, config_name: str):
+        self.repository.new_property(self.current_run_id, "name.config", config_name)
         return self
 
     def generate_run_id(self):
@@ -108,21 +116,21 @@ class Facade:
         return self
 
     def save_transformation_instruction(self, instructions: list):
-        self.object_store.save_transformation_instruction(instructions)
+        self.object_store.save_transformation_instruction(self.current_run_id, instructions)
         return self
 
     def save_transformation_object(self, transformation_objects: list):
-        self.object_store.save_transformation_object(transformation_objects)
+        self.object_store.save_transformation_object(self.current_run_id, transformation_objects)
         return self
     
     def load_transformation_instruction(self):
-        return self.object_store.load_transformation_instruction()
+        return self.object_store.load_transformation_instruction(self.current_run_id)
     
     def load_transformation_object(self):
-        return self.object_store.load_transformation_object()
+        return self.object_store.load_transformation_object(self.current_run_id)
     
     def save_model(self, model):
-        self.object_store.save_model(model)
+        self.object_store.save_model(self.current_run_id, model)
         return self
     
     def load_model(self, id: str):
@@ -138,6 +146,10 @@ class Facade:
 
     def set_training_time(self, time: float):
         self.repository.new_metric(self.current_child_run_id, f"time_ms.train", time)
+        return self
+
+    def set_training_type(self, name: str):
+        self.repository.new_property(self.current_child_run_id, "name.model", name)
         return self
 
     def set_model_properties(self, options: dict):
@@ -156,3 +168,15 @@ class Facade:
     def tag_as_the_best(self):
         self.repository.new_tag(self.current_child_run_id, "level", "best")
         return self
+
+    def find_all_available_runs(self):
+        return self.repository.find_all_available_runs(self.experiment_id)
+
+    def load_model_under_parent_run(self, parent_run_id: str):
+        best = self.repository.find_best_model_within_run(parent_run_id, "validation.valid.accuracy")
+        if best is None:
+            raise ValueError(f"No best model found under parent run {parent_run_id}")
+        model_path = self.repository.find_property(best, "name.path.model")
+        if model_path is None:
+            raise ValueError(f"No model path found for best model {best} under parent run {parent_run_id}")
+        return self.object_store.load_model(model_path)

@@ -15,6 +15,7 @@ from typing import Optional, List
 from train.sstruct import Pairs
 from sklearn.model_selection import ParameterGrid
 from repositories.struct import ModelObject
+from repositories.repo import Facade
 import time
 
 class TabularModel(ABC):
@@ -36,7 +37,7 @@ class ModelWrapper:
         self.name = name
         self.model = model
         self.hyperparameters = hyperparameters
-        self.facade = facade
+        self.facade: Facade = facade
         self.run_id = run_id
 
     def train(self, pairs: Pairs):
@@ -47,6 +48,7 @@ class ModelWrapper:
         end = time.time()
         duration_ms = (end - start) * 1000.0
         self.facade.set_training_time(duration_ms)
+        self.facade.set_training_type(self.name)
         return self
 
     def validate(self, pairs: Pairs, metrics: List[str]):
@@ -111,7 +113,7 @@ class ModelTrainer:
             parameter_grid="exhaustive",
             metrics=[]
         ):
-        self.facade = facade
+        self.facade: Facade = facade
         self.random_state = random_state
         self.objective = objective
         self.parameter_grid = parameter_grid

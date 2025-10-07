@@ -27,16 +27,6 @@ class Stage(Enum):
             "valid": cls.VALID,
         }[name]
 
-    @classmethod
-    def mse_metrics(cls, s: 'Stage'):
-        if s == cls.TRAIN:
-            return "train_mse"
-        if s == cls.VALID:
-            return "valid_mse"
-        if s == cls.TEST:
-            return "test_mse"
-        return None
-
 class FeatureTargetPair:
     def __init__(
         self, 
