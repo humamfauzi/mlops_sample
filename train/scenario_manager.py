@@ -72,6 +72,7 @@ class ScenarioManager:
     def construct(self):
         facade = Facade.parse_instruction(self.instruction.repository)
         facade.new_run(facade.generate_run_id())
+        facade.set_intent(self.instruction.name)
         for step in self.instruction.instructions:
             if step.type == InstructionEnum.DATA_IO:
                 self.pipeline.append(Disk.parse_instruction(step.properties, step.call, facade))
@@ -90,6 +91,5 @@ class ScenarioManager:
         for component in self.pipeline:
             recurse = component.execute(recurse)
         self.facade.set_total_runtime((time.time() - start) * 1000.0)
-        self.facade.generate_inference_instruction()
         return recurse
     

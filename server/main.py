@@ -75,7 +75,7 @@ async def cfs2017():
 @app.get("/cfs2017/{model}/metadata")
 async def cfs2017ModelMetadata(request: Request):
     model = request.path_params["model"]
-    dd = cfs2017.metadata(model_name=model)
+    dd = model.metadata(model_name=model)
     return response.MetadataReponse(
         message="success", 
         metadata=dd["metadata"], 

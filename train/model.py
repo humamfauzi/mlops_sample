@@ -85,7 +85,7 @@ class ModelWrapper:
                 value = mm[metric](pairs.test.y, y_pred)
                 self.facade.set_metric("test", metric, value)
         self.facade.set_validation_time("test", (time.time() - start) * 1000.0)
-        return self
+        return value
 
     def set_as_the_best(self):
         self.facade.tag_as_the_best()
@@ -98,8 +98,8 @@ class ModelWrapper:
         return self
 
 class ModelTrainer:
-    objective_best_model = "best_model"
     objective_first_model = "first_model" # for test unit purpose
+    objective_best_model = "best_model"
     objective_fast_model = "fast_model"
 
     parameter_grid_exhaustive = "exhaustive"
@@ -111,14 +111,18 @@ class ModelTrainer:
             objective="best_model",
             fold=5,
             parameter_grid="exhaustive",
-            metrics=[]
+            metrics=[],
+            primary_metrics=""
         ):
         self.facade: Facade = facade
         self.random_state = random_state
         self.objective = objective
         self.parameter_grid = parameter_grid
         self.fold = fold
+        if primary_metrics == "" or primary_metrics not in metrics:
+            raise ValueError("Primary metric must be one of the metrics and not empty")
         self.metrics = metrics
+        self.primary_metrics = primary_metrics
         self.models = []
         pass
 
@@ -139,7 +143,8 @@ class ModelTrainer:
             model.save()
 
         best_model = self.compare_model()
-        self.check_model_against_test(best_model, input_data)
+        test_metric = self.check_model_against_test(best_model, input_data)
+        self.nominate_for_publishing(test_metric, best_model.run_id)
         return self
 
     def add_model(self, call: dict):
@@ -183,7 +188,7 @@ class ModelTrainer:
         if len(self.models) == 0:
             raise ValueError("No model to compare")
         if self.objective == self.objective_best_model:
-            id = self.facade.find_best_model("rmse")
+            id = self.facade.find_best_model(self.primary_metrics)
             best_model = self.find_model_by_id(id)
             best_model.set_as_the_best()
             return best_model
@@ -201,5 +206,10 @@ class ModelTrainer:
     def check_model_against_test(self, best_model: ModelWrapper, input_data: Pairs):
         if best_model is None:
             raise ValueError("Best model is None")
-        best_model.test(input_data, self.metrics)
-        return self
+        value = best_model.test(input_data, self.metrics)
+        return value
+
+    def nominate_for_publishing(self, current_score: float, model_id: str):
+        intent = self.facade.get_intent()
+        _, parent_id = self.facade.get_model_run_id(model_id)
+        self.facade.nominate_for_publishing(intent, self.primary_metrics, current_score, parent_id)

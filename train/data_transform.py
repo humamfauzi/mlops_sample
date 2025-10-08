@@ -11,8 +11,8 @@ from train.column import TabularColumn
 from train.sstruct import Pairs, Stage, FeatureTargetPair
 from train.wrapper import ProcessWrapper
 from repositories.struct import TransformationObject, TransformationInstruction
-from dataclasses import dataclass, field
-from typing import Optional, List
+from dataclasses import dataclass
+from typing import  List
 from enum import Enum
 
 class TabularDataTransform(ABC):
@@ -40,14 +40,15 @@ class Keeper:
     column: TabularColumn
     function: any
     method: TransformationMethods
-    reverse_transform: bool
+    inverse_transform: bool
 
     def to_dict(self):
         return {
             "id": self.id,
             "name": self.name,
             "column": self.column,
-            "method": self.method,
+            "method": self.method.name,
+            "inverse_transform": self.inverse_transform
         }
 
 class Transformer:
@@ -56,22 +57,22 @@ class Transformer:
         self.keepers = []
         self.facade = facade
 
-    def keeper_builder(self, column, col, condition, count):
+    def keeper_builder(self,typee,  column, col, condition, count):
         c = column.from_enum(col).name
 
-        if col == column.target():
+        inverse_transform = False
+        if col.upper() == column.target():
             inverse_transform = True
-
         return {
-            "log_transformation": lambda _: Keeper(
+            "log_transformation": lambda: Keeper(
                 id = f"log-{count:02d}-{col}",
                 name="log",
                 column=c,
                 function=ProcessWrapper(np.log, np.exp),
-                method=TransformationMethods[condition]
+                method=TransformationMethods[condition],
                 inverse_transform=inverse_transform
             ),
-            "normalization": lambda _: Keeper(
+            "normalization": lambda: Keeper(
                 id=f"norm-{count:02d}-{col}",
                 name="normalization",
                 column=c,
@@ -79,7 +80,7 @@ class Transformer:
                 method=TransformationMethods[condition],
                 inverse_transform=inverse_transform
             ),
-            "min_max_transformation": lambda _: Keeper(
+            "min_max_transformation": lambda: Keeper(
                 id=f"minmax-{count:02d}-{col}",
                 name="min_max",
                 column=c,
@@ -87,7 +88,7 @@ class Transformer:
                 method=TransformationMethods[condition],
                 inverse_transform=inverse_transform,
             ),
-            "one_hot_encoding": lambda _: Keeper(
+            "one_hot_encoding": lambda: Keeper(
                 id=f"ohe-{count:02d}-{col}",
                 name="one_hot_encoding",
                 column=c,
@@ -95,7 +96,7 @@ class Transformer:
                 method=TransformationMethods.APPEND_AND_REMOVE,
                 inverse_transform=inverse_transform,
             ),
-            "standardization": lambda _: Keeper(
+            "standardization": lambda: Keeper(
                 id=f"std-{count:02d}-{col}",
                 name="standardization",
                 column=c,
@@ -103,7 +104,7 @@ class Transformer:
                 method=TransformationMethods[condition],
                 inverse_transform=inverse_transform,
             ),
-        }
+        }[typee]()
 
     @classmethod
     def parse_instruction(cls, properties: dict, call: List[dict], facade):
@@ -112,61 +113,9 @@ class Transformer:
         count = -1
         for step in call:
             count += 1
-            if step["type"] == "log_transformation":
-                for col in step["columns"]:
-                    c.keepers.append(
-                        Keeper(
-                            id = f"log-{count:02d}-{col}",
-                            name="log",
-                            column=column.from_enum(col).name,
-                            function=ProcessWrapper(np.log, np.exp),
-                            method=TransformationMethods[step["condition"].upper()]
-                        )
-                    )
-            elif step["type"] == "normalization":
-                for col in step["columns"]:
-                    c.keepers.append(
-                        Keeper(
-                            id=f"norm-{count:02d}-{col}",
-                            name="normalization",
-                            column=column.from_enum(col).name,
-                            function=Normalizer(norm='l2'),
-                            method=TransformationMethods[step["condition"].upper()]
-                        )
-                    )
-            elif step["type"] == "min_max_transformation":
-                for col in step["columns"]:
-                    c.keepers.append(
-                        Keeper(
-                            id=f"minmax-{count:02d}-{col}",
-                            name="min_max",
-                            column=column.from_enum(col).name,
-                            function=MinMaxScaler(),
-                            method=TransformationMethods[step["condition"].upper()]
-                        )
-                    )
-            elif step["type"] == "one_hot_encoding":
-                for col in step["columns"]:
-                    c.keepers.append(
-                        Keeper(
-                            id=f"ohe-{count:02d}-{col}",
-                            name="one_hot_encoding",
-                            column=column.from_enum(col).name,
-                            function=OneHotEncoder(sparse_output=False, handle_unknown='infrequent_if_exist'),
-                            method=TransformationMethods.APPEND_AND_REMOVE
-                        )
-                    )
-            elif step["type"] == "standardization":
-                for col in step["columns"]:
-                    c.keepers.append(
-                        Keeper(
-                            id=f"std-{count:02d}-{col}",
-                            name="standardization",
-                            column=column.from_enum(col).name,
-                            function=StandardScaler(),
-                            method=TransformationMethods[step["condition"].upper()]
-                        )
-                    )
+            for col in step["columns"]:
+                keeper = c.keeper_builder(step["type"], column, col, step["condition"].upper(), count)
+                c.keepers.append(keeper)
             return c
 
     def _save_manifest(self, df: pd.DataFrame):

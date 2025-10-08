@@ -33,22 +33,6 @@ class SQLiteRepository:
             conn.commit()
             return c.lastrowid
 
-    def new_tag(self, run_id: int, key: str, value: str):
-        with sqlite3.connect(self.name) as conn:
-            c = conn.cursor()
-            c.execute('SELECT id FROM tags WHERE run_id = ? AND key = ?', (run_id, key))
-            row = c.fetchone()
-            if row:
-                # update existing tag
-                c.execute('UPDATE tags SET value = ? WHERE id = ?', (value, row[0]))
-                value =  row[0]
-            else:
-                # insert new tag
-                c.execute('INSERT INTO tags (run_id, key, value) VALUES (?, ?, ?)', (run_id, key, value))
-                value = c.lastrowid
-            conn.commit()
-            return value
-
     def new_metric(self, run_id: int, key: str, value: float):
         with sqlite3.connect(self.name) as conn:
             c = conn.cursor()
@@ -156,6 +140,58 @@ class SQLiteRepository:
             c.execute(query, (experiment_id,))
             results = c.fetchall()
             return [{"id": id, "name": name} for id, name in results]
+    
+    def get_model_run_id(self, model_name: str):
+        with sqlite3.connect(self.name) as conn:
+            c = conn.cursor()
+            c.execute('SELECT id, parent_id FROM runs WHERE name = ?', (model_name,))
+            result = c.fetchone()
+            if result:
+                return result  # return run id
+            raise ValueError(f"Model with name {model_name} not found")
+
+    def get_intent(self, run_id: int):
+        with sqlite3.connect(self.name) as conn:
+            c = conn.cursor()
+            c.execute('SELECT value FROM properties WHERE run_id = ? AND key = ?', (run_id, "name.intent"))
+            result = c.fetchone()
+            if result:
+                return result[0]  # return intent value
+            raise ValueError(f"Intent not found for run id {run_id}")
+
+    def select_previously_published(self, experiment_id: str, intent: str, primary_metric: str):
+        with sqlite3.connect(self.name) as conn:
+            c = conn.cursor()
+            query = '''
+                SELECT r.id, m.value
+                FROM runs r
+                JOIN tags t ON r.id = t.run_id
+                JOIN runs rc ON rc.parent_id = r.id
+                JOIN properties p ON r.id = p.run_id
+                JOIN metrics m ON rc.id = m.run_id
+                WHERE t.key = 'status.deployment' AND t.value = 'published'
+                    AND p.key = 'name.intent' AND p.value = ? AND r.experiment_id = ? AND m.key = ?
+            '''
+            c.execute(query, (intent, experiment_id, f"validation.test.{primary_metric}"))
+            result = c.fetchall()
+            print("select_previously_published", intent, experiment_id, primary_metric, result)
+            if len(result) == 0:
+                return None, float('inf')
+            return result[0]
+
+    def upsert_tag(self, run_id: int, key: str, value: str):
+        with sqlite3.connect(self.name) as conn:
+            c = conn.cursor()
+            c.execute('SELECT id FROM tags WHERE run_id = ? AND key = ?', (run_id, key))
+            row = c.fetchone()
+            if row:
+                c.execute('UPDATE tags SET value = ? WHERE id = ?', (value, row[0]))
+                value =  row[0]
+            else:
+                c.execute('INSERT INTO tags (run_id, key, value) VALUES (?, ?, ?)', (run_id, key, value))
+                value = c.lastrowid
+            conn.commit()
+            return value
 
     def migrate(self):
         with sqlite3.connect(self.name) as conn:

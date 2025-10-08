@@ -6,16 +6,19 @@ from enum import Enum
 class TransformationInstruction:
     id: str
     name: str
-    column: Enum
-    method: Enum
+    column: str
+    method: str
+    inverse_transform: bool
 
     def to_dict(self):
         return {
             "id": self.id,
             "name": self.name,
             "column": self.column,
-            "method": self.method.name,
+            "method": self.method,
+            "inverse_transform": self.inverse_transform
         }
+
 
 @dataclass
 class TransformationObject:

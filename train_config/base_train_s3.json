@@ -1,6 +1,6 @@
 
 {
-    "name": "base_train",
+    "name": "base_train_s3",
     "description": "Base training configuration. Used for testing and debugging pipeline.",
     "repository": {
         "experiment_id": "experiment_001",
@@ -66,6 +66,7 @@
                 "parameter_grid": {
                     "type": "exhaustive"
                 },
+                "primary_metrics": "rmse",
                 "metrics": ["rmse"]
             },
             "call": [

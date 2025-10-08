@@ -1,5 +1,6 @@
 import math
 from random import random
+from xml.parsers.expat import model
 from repositories.sqlite import SQLiteRepository
 from repositories.disk import Disk
 import repositories.noop as noop
@@ -47,8 +48,8 @@ class Facade:
         self.current_run_id = new_run_id
         return self
 
-    def set_config_name(self, config_name: str):
-        self.repository.new_property(self.current_run_id, "name.config", config_name)
+    def set_intent(self, intent: str):
+        self.repository.new_property(self.current_run_id, "name.intent", intent)
         return self
 
     def generate_run_id(self):
@@ -168,7 +169,7 @@ class Facade:
         return self.repository.find_best_model_within_run(self.current_run_id, f"validation.valid.{metric}")
 
     def tag_as_the_best(self):
-        self.repository.new_tag(self.current_child_run_id, "level", "best")
+        self.repository.upsert_tag(self.current_child_run_id, "level", "best")
         return self
 
     def find_all_available_runs(self):
@@ -189,7 +190,24 @@ class Facade:
     def load_inference(self, model_id: int):
         return self.object_store.load_model(model_id)
 
+    def get_intent(self):
+        return self.repository.get_intent(self.current_run_id)
 
+    def get_model_run_id(self, model_id: str):
+        return self.repository.get_model_run_id(model_id)
+
+    def nominate_for_publishing(self, intent: str, primary_metric: str, current_score: float, current_model_id: int):
+        id, previous_score = self.repository.select_previously_published(self.experiment_id, intent, primary_metric)
+        print(">>>>>", id, previous_score, self.experiment_id, intent, primary_metric)
+        key = "status.deployment"
+        if id is None:
+            self.repository.upsert_tag(current_model_id,key, "published")
+            return
+        if current_score < previous_score:
+            self.repository.upsert_tag(id,key, "retracted")
+            self.repository.upsert_tag(current_model_id,key, "published")
+        else:
+            self.repository.upsert_tag(current_model_id,key, "inferior")
 
 @dataclass
 class InferenceModelInstruction:
