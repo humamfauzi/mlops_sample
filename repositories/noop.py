@@ -28,20 +28,41 @@ class Repository:
     def find_best_model_within_run(self, parent_run_id: int, metric: str):
         return None
 
+    def upsert_tag(self, run_id: int, key: str, value: str):
+        return None
+
+    def find_all_available_runs(self, experiment_id: str):
+        return []
+
+    def find_property(self, run_id: int, key: str):
+        return None
+
+    def get_all_published_candidates(self, experiment_id: str):
+        return []
+
+    def get_intent(self, run_id: int):
+        return None
+
+    def get_model_run_id(self, model_id: str):
+        return None
+
+    def select_previously_published(self, experiment_id: str, intent: str, primary_metric: str):
+        return None, None
+
 class Object:
-    def save_transformation_instruction(self, instructions: List[TransformationInstruction]):
+    def save_transformation_instruction(self, run_id: int, instructions: List[TransformationInstruction]):
         return None
 
-    def save_transformation_object(self, transformation_objects: List[TransformationObject]):
+    def save_transformation_object(self, run_id: int, transformation_objects: List[TransformationObject]):
         return None
 
-    def load_transformation_instruction(self):
+    def load_transformation_instruction(self, run_id: int):
         return None
 
-    def load_transformation_object(self):
+    def load_transformation_object(self, run_id: int):
         return None
 
-    def save_model(self, model: ModelObject):
+    def save_model(self, run_id: int, model: ModelObject):
         return None
 
     def load_model(self, id: str):

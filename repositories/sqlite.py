@@ -1,5 +1,6 @@
 import sqlite3
 import uuid
+import json
 
 class SQLiteRepository:
     def __init__(self, name='example.db', migrate=False):
@@ -192,6 +193,38 @@ class SQLiteRepository:
                 value = c.lastrowid
             conn.commit()
             return value
+
+    def get_object(self, run_id: int, key: str):
+        with sqlite3.connect(self.name) as conn:
+            c = conn.cursor()
+            c.execute('SELECT url FROM objects WHERE run_id = ? AND type = ?', (run_id, key))
+            result = c.fetchone()
+            if result:
+                return json.loads(result[0])  # return the JSON object
+            raise ValueError(f"Object with key {key} not found for run id {run_id}")
+
+    def find_tagged_best_model(self, run_id: int):
+        with sqlite3.connect(self.name) as conn:
+            c = conn.cursor()
+            c.execute('''
+                SELECT r.id, r.name FROM runs r
+                JOIN tags t ON r.id = t.run_id
+                JOIN runs rp ON r.parent_id = rp.id
+                WHERE rp.id = ? AND t.key = 'level' AND t.value = 'best'
+            ''', (run_id,))
+            result = c.fetchone()
+            if result:
+                return result
+            raise ValueError(f"Model best model not found for run id {run_id}")
+
+    def find_property(self, run_id: int, key: str):
+        with sqlite3.connect(self.name) as conn:
+            c = conn.cursor()
+            c.execute('SELECT value FROM properties WHERE run_id = ? AND key = ?', (run_id, key))
+            result = c.fetchone()
+            if result:
+                return result[0]  # return property value
+            return None
 
     def migrate(self):
         with sqlite3.connect(self.name) as conn:

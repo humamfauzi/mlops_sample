@@ -10,6 +10,7 @@ import server.response as response
 from typing import Optional
 from contextlib import asynccontextmanager
 from repositories.repo import Facade
+from dotenv import load_dotenv, find_dotenv
 
 origins = [
     "http://localhost:3000",
@@ -34,11 +35,37 @@ class TimeoutMiddleware(BaseHTTPMiddleware):
 # the model would be loaded. Once loaded, it would be accessed via API
 model: Optional[InferenceManager] = None
 
+def load_env() -> dict:
+    try:
+        dotenv_file = find_dotenv(usecwd=True)
+        if dotenv_file:
+            load_dotenv(dotenv_file, override=False)
+    except Exception as e:
+        raise ValueError("Failed to load .env file") from e
+    instruction = {
+        "experiment_id": os.getenv("EXPERIMENT_ID", "sample"),
+        "stage": os.getenv("STAGE", "dev"),
+        "data": {
+            "type": os.getenv("REPOSITORY_DATA", "sqlite"),
+            "properties": {
+                "name": os.getenv("REPOSITORY_DATA_PATH", "example.db")
+            }
+        },
+        "object": {
+            "type": os.getenv("REPOSITORY_OBJECT", "s3"),
+            "properties": {
+                "bucket_name": os.getenv("REPOSITORY_S3_BUCKET", "humamf-artifacts")
+            }
+        }
+    }
+    return instruction
+
 @asynccontextmanager
 async def lifespan(app):
     global model
-    repo = Facade.parse_instruction({}) # placeholder
-    model = InferenceManager.parse_instruction(repo, {"experiment_id": os.getenv("EXPERIMENT_ID", "sample")})
+    instruction = load_env()
+    repo = Facade.parse_instruction(instruction)
+    model = InferenceManager.parse_instruction(repo, {"experiment_id": instruction["experiment_id"]})
     try:
         yield
     finally:
@@ -71,11 +98,12 @@ async def cfs2017():
 # Primary endpoint for getting all metadata about the model
 @app.get("/cfs2017/{model}/metadata")
 async def cfs2017ModelMetadata(request: Request):
-    model = request.path_params["model"]
-    dd = model.metadata(model_name=model)
+    name = request.path_params["model"]
+    dd = model.metadata(model_name=name)
     return response.MetadataReponse(
         message="success", 
-        metadata=dd["metadata"], 
+        metadata={},
+        # metadata=dd["metadata"], 
         input=dd["input"], 
         description=dd["description"]
     ).to_json_response()

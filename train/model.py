@@ -38,6 +38,7 @@ class ModelWrapper:
         self.model = model
         self.hyperparameters = hyperparameters
         self.facade: Facade = facade
+        # It is the random string not the integer id
         self.run_id = run_id
 
     def train(self, pairs: Pairs):
@@ -92,7 +93,7 @@ class ModelWrapper:
         return self
 
     def save(self):
-        model_object = ModelObject(filename=f"{self.run_id}-{self.name}", object=self.model)
+        model_object = ModelObject(filename=f"{self.run_id}", object=self.model)
         self.facade.save_model(model_object)
         self.facade.set_model_properties(self.hyperparameters)
         return self

@@ -9,7 +9,8 @@ class Model:
 
     @classmethod
     def construct(self, repository: Facade, run_id: int):
-        pass
+        model = repository.get_model_best_model(run_id)
+        return model
 
 
 

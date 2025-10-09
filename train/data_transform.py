@@ -1,4 +1,5 @@
 import time
+import json
 import pandas as pd
 import numpy as np
 import os 
@@ -121,7 +122,7 @@ class Transformer:
     def _save_manifest(self, df: pd.DataFrame):
         if self.facade is None:
             return self
-        self.facade.set_object_transformation("transformation.allowed_columns", str(df.columns.tolist()))
+        self.facade.set_object_transformation("transformation.allowed_columns", json.dumps(df.columns.tolist()))
         return self
 
     def _split_stage(self, transformed_data: pd.DataFrame):

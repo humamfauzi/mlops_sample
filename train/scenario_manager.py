@@ -73,6 +73,7 @@ class ScenarioManager:
         facade = Facade.parse_instruction(self.instruction.repository)
         facade.new_run(facade.generate_run_id())
         facade.set_intent(self.instruction.name)
+        facade.set_description(self.instruction.description)
         for step in self.instruction.instructions:
             if step.type == InstructionEnum.DATA_IO:
                 self.pipeline.append(Disk.parse_instruction(step.properties, step.call, facade))

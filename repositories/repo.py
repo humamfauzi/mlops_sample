@@ -11,6 +11,7 @@ class Facade:
     @classmethod
     def parse_instruction(cls, config: dict):
         if len(config) == 0:
+            print("No configuration provided, using default noop repositories.")
             return cls("sample", noop.Repository(), noop.Object())
         repository = config.get("data", None)
         if repository.get("type") == "sqlite":
@@ -50,6 +51,10 @@ class Facade:
 
     def set_intent(self, intent: str):
         self.repository.new_property(self.current_run_id, "name.intent", intent)
+        return self
+
+    def set_description(self, description: str):
+        self.repository.new_property(self.current_run_id, "name.description", description)
         return self
 
     def generate_run_id(self):
@@ -114,8 +119,8 @@ class Facade:
         self.repository.new_metric(self.current_run_id, f"time_ms.transforming.{name}", time)
         return self
 
-    def set_object_transformation(self, type: str, url: str):
-        self.repository.new_object(self.current_run_id, type, url)
+    def set_object_transformation(self, type: str, obj: str):
+        self.repository.new_object(self.current_run_id, type, obj)
         return self
 
     def save_transformation_instruction(self, instructions: list):
@@ -126,18 +131,18 @@ class Facade:
         self.object_store.save_transformation_object(self.current_run_id, transformation_objects)
         return self
     
-    def load_transformation_instruction(self):
-        return self.object_store.load_transformation_instruction(self.current_run_id)
+    def load_transformation_instruction(self, run_id: int):
+        return self.object_store.load_transformation_instruction(run_id)
     
-    def load_transformation_object(self):
-        return self.object_store.load_transformation_object(self.current_run_id)
+    def load_transformation_object(self, run_id: int):
+        return self.object_store.load_transformation_object(run_id)
     
     def save_model(self, model):
         self.object_store.save_model(self.current_run_id, model)
         return self
     
-    def load_model(self, id: str):
-        return self.object_store.load_model(id)
+    def load_model(self, name: str):
+        return self.object_store.load_model(name)
 
     def set_metric(self, stage, metric_name: str, value: float):
         self.repository.new_metric(self.current_child_run_id, f"validation.{stage}.{metric_name}", value)
@@ -187,8 +192,8 @@ class Facade:
     def get_all_published_candidates(self, experiment_id: str):
         return self.repository.get_all_published_candidates(experiment_id)
 
-    def load_inference(self, model_id: int):
-        return self.object_store.load_model(model_id)
+    def load_inference(self, model_name: str):
+        return self.object_store.load_model(model_name)
 
     def get_intent(self):
         return self.repository.get_intent(self.current_run_id)
@@ -198,7 +203,6 @@ class Facade:
 
     def nominate_for_publishing(self, intent: str, primary_metric: str, current_score: float, current_model_id: int):
         id, previous_score = self.repository.select_previously_published(self.experiment_id, intent, primary_metric)
-        print(">>>>>", id, previous_score, self.experiment_id, intent, primary_metric)
         key = "status.deployment"
         if id is None:
             self.repository.upsert_tag(current_model_id,key, "published")
@@ -208,6 +212,18 @@ class Facade:
             self.repository.upsert_tag(current_model_id,key, "published")
         else:
             self.repository.upsert_tag(current_model_id,key, "inferior")
+
+    def get_available_input(self, run_id: int):
+        instruction = self.repository.get_object(run_id, "transformation.allowed_columns")
+        return instruction
+
+    def get_run_description(self, run_id: int):
+        return self.repository.find_property(run_id, "name.description")
+
+    def get_model_best_model(self, run_id: int):
+        _, name = self.repository.find_tagged_best_model(run_id)
+        model =  self.object_store.load_model(run_id, name)
+        return model
 
 @dataclass
 class InferenceModelInstruction:

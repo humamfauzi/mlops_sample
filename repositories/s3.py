@@ -17,6 +17,7 @@ class S3:
         aws_secret_access_key = os.getenv("AWS_SECRET_ACCESS_KEY")
         aws_session_token = os.getenv("AWS_SESSION_TOKEN")
         region_name = os.getenv("AWS_REGION") or os.getenv("AWS_DEFAULT_REGION")
+        print(aws_access_key_id, aws_secret_access_key, aws_session_token, region_name)
 
         client_kwargs = {}
         if aws_access_key_id and aws_secret_access_key:
@@ -64,9 +65,9 @@ class S3:
     def load_transformation_instruction(self, run_id: str):
         key = f"{run_id}/transformation/instruction.json"
 
-        # Download from S3
         response = self.s3_client.get_object(Bucket=self.bucket_name, Key=key)
         data = json.loads(response['Body'].read().decode('utf-8'))
+        print("Loading from S3:", self.bucket_name, key, data)
         
         return [TransformationInstruction(**item) for item in data]
 
@@ -105,14 +106,11 @@ class S3:
         )
         return f"s3://{self.bucket_name}/{key}"
 
-    def load_model(self, id: str):
-        key = f"model/{id}.pkl"
-        
-        # Download from S3
+    def load_model(self, parent_run_id:int, name: str):
+        key = f"{parent_run_id}/model/{name}"
         response = self.s3_client.get_object(Bucket=self.bucket_name, Key=key)
         model = pickle.loads(response['Body'].read())
-        
-        return ModelObject(filename=f"{id}.pkl", object=model)
+        return ModelObject(filename=name, object=model)
 
 
     

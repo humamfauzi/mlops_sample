@@ -50,8 +50,8 @@ _ = ListResponse(message="", data=[])
 class MetadataReponse(Response):
     """Content structure for model metadata"""
     message: str
-    metadata: List[model.Metadata]
-    input: List[model.Input]
+    metadata: List[str]
+    input: List[str]
     description: str
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -72,7 +72,7 @@ _ = MetadataReponse(message="", metadata=[], input=[], description="")
 class InferenceResponse(Response):
     """Content structure for inference response"""
     message: str
-    output: model.Output
+    output: any
     def to_dict(self) -> Dict[str, str]:
         return {
             "message": self.message,
@@ -81,7 +81,7 @@ class InferenceResponse(Response):
     def to_json_response(self) -> JSONResponse:
         return JSONResponse(status_code=200, content=self.to_dict())
 
-_ = InferenceResponse(message="", output=model.NumericalInput(key="", display="", min=0.0, max=1.0))
+_ = InferenceResponse(message="", output=123)
 
 @dataclass
 class ErrorResponse(Response):

@@ -11,21 +11,36 @@ class Transformation:
 
     @classmethod
     def construct(cls, facade: Facade, run_id: int):
-        transformations = []
-        for step in instruction.get("transformation_steps", []):
-            pass
+        instructions = facade.load_transformation_instruction(run_id)
+        transformations, itransformations = [], []
 
-        itransformations = []
-        for step in instruction.get("inverse_transformation_steps", []):
-            pass
-
-        available_input = instruction.get("available_column", [])
+        for step in instructions:
+            print(step)
+            fobject = facade.load_transformation_object(step.id)
+            def fn(input):
+                selected = input[step.column]
+                selected = fobject.transform(selected)
+                input[step.column] = selected
+                return input
+            transformations.append(fn)
+            if step.inverse_transform:
+                def ifn(output):
+                    selected = output[step.column]
+                    selected = fobject.inverse_transform(selected)
+                    output[step.column] = selected
+                    return output
+                itransformations.append(ifn)
 
         t = cls(facade)
         t.transformations = transformations
         t.itransformations = itransformations
+
+        available_input = facade.get_available_input(run_id)
         t.available_input = available_input
         return t
+
+    def get_available_input(self):
+        return self.available_input
 
     def parse_input(self, input: dict) -> dict:
         for col in self.available_input:
