@@ -45,6 +45,7 @@ def load_env() -> dict:
     instruction = {
         "experiment_id": os.getenv("EXPERIMENT_ID", "sample"),
         "stage": os.getenv("STAGE", "dev"),
+        "column_reference": os.getenv("COLUMN_REFERENCE", "commodity_flow"),
         "data": {
             "type": os.getenv("REPOSITORY_DATA", "sqlite"),
             "properties": {
@@ -65,7 +66,7 @@ async def lifespan(app):
     global model
     instruction = load_env()
     repo = Facade.parse_instruction(instruction)
-    model = InferenceManager.parse_instruction(repo, {"experiment_id": instruction["experiment_id"]})
+    model = InferenceManager.parse_instruction(repo, {"experiment_id": instruction["experiment_id"], "column_reference": instruction["column_reference"]})
     try:
         yield
     finally:

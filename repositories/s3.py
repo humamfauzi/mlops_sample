@@ -17,7 +17,6 @@ class S3:
         aws_secret_access_key = os.getenv("AWS_SECRET_ACCESS_KEY")
         aws_session_token = os.getenv("AWS_SESSION_TOKEN")
         region_name = os.getenv("AWS_REGION") or os.getenv("AWS_DEFAULT_REGION")
-        print(aws_access_key_id, aws_secret_access_key, aws_session_token, region_name)
 
         client_kwargs = {}
         if aws_access_key_id and aws_secret_access_key:
@@ -67,27 +66,14 @@ class S3:
 
         response = self.s3_client.get_object(Bucket=self.bucket_name, Key=key)
         data = json.loads(response['Body'].read().decode('utf-8'))
-        print("Loading from S3:", self.bucket_name, key, data)
         
         return [TransformationInstruction(**item) for item in data]
 
-    def load_transformation_object(self, run_id: str):
-        prefix = f"{run_id}/transformation/objects/"
-        response = self.s3_client.list_objects_v2( Bucket=self.bucket_name, Prefix=prefix)
-        
-        objects = []
-        if 'Contents' in response:
-            for obj in response['Contents']:
-                key = obj['Key']
-                filename = key.split('/')[-1]  # Extract filename from key
-                
-                # Download and deserialize object
-                obj_response = self.s3_client.get_object(Bucket=self.bucket_name, Key=key)
-                obj_data = pickle.loads(obj_response['Body'].read())
-                
-                objects.append(TransformationObject(filename=filename, object=obj_data))
-        
-        return objects
+    def load_transformation_object(self, run_id: str, transformation_id: str = ""):
+        prefix = f"{run_id}/transformation/objects/{transformation_id}.pkl"
+        response = self.s3_client.get_object(Bucket=self.bucket_name, Key=prefix)
+        data = pickle.loads(response['Body'].read())
+        return TransformationObject(filename=transformation_id, object=data)
 
     def save_model(self, run_id:str,  model: ModelObject):
         key = f"{run_id}/model/{model.filename}"

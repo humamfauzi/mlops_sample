@@ -122,7 +122,8 @@ class Transformer:
     def _save_manifest(self, df: pd.DataFrame):
         if self.facade is None:
             return self
-        self.facade.set_object_transformation("transformation.allowed_columns", json.dumps(df.columns.tolist()))
+        inputs = set(df.columns.to_list()) - set([self.column.target()])
+        self.facade.set_object_transformation("transformation.allowed_columns", json.dumps(list(inputs)))
         return self
 
     def _split_stage(self, transformed_data: pd.DataFrame):

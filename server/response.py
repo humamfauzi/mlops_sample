@@ -76,7 +76,7 @@ class InferenceResponse(Response):
     def to_dict(self) -> Dict[str, str]:
         return {
             "message": self.message,
-            "data": self.output.to_dict()
+            "data": self.output
         }
     def to_json_response(self) -> JSONResponse:
         return JSONResponse(status_code=200, content=self.to_dict())

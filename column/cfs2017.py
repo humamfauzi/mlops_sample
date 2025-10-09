@@ -1,8 +1,98 @@
 from enum import Enum
-from column.abc import TabularColumn
+from abc import ABC, abstractmethod
 from typing import List
 
+# a join between primary id, target, categorical, and numerical should always be
+# a full column
+class TabularColumn(ABC):
+    # a dataframe should always have primary identifier
+    # that unique in all rows
+    @classmethod
+    @abstractmethod
+    def primary_id(cls):
+        pass
+
+    # a training dataset should also have a target
+    @classmethod
+    @abstractmethod
+    def target(cls):
+        pass
+
+    # all tabular dataset either a categorical or numerical
+    # this methods will call all categorical column
+    @classmethod
+    @abstractmethod
+    def categorical(cls):
+        pass
+
+    # all tabular dataset either a categorical or numerical
+    # this methods will call all numerical column
+    @classmethod
+    @abstractmethod
+    def numerical(cls):
+        pass
+
+    # The reason why you need current column input because
+    # there is high chance that you dont use all column because one or other thing
+    # there fore we need to know the current input and find intersect
+    # between it and all possible feature
+    @classmethod
+    @abstractmethod
+    def feature(cls, current_column: List[Enum]):
+        pass
+
+    @classmethod
+    def from_string(cls, name: str):
+        if name == "commodity_flow":
+            return CommodityFlow
+        elif name == "sample":
+            return SampleEnum
+        elif name == "sample_enum_transformer":
+            return SampleEnumTransformer
+        else:
+            raise ValueError(f"Cannot find enum with name {name}")
+
+class SampleEnum(Enum):
+    COLUMN_ID = 1
+    COLUMN_FEATURE = 2
+    COLUMN_FEATURE_DELETED = 3 
+    COLUMN_TARGET = 4
+
+    @classmethod
+    def from_enum(cls, e:str):
+        for member in cls:
+            if member.name == e.upper():
+                return member
+        raise ValueError(f"Cannot find enum with name {e}")
+
+    @classmethod
+    def primary_id(cls):
+        return cls.COLUMN_ID.name
+
+    @classmethod
+    def target(cls):
+        return cls.COLUMN_TARGET.name
+
+    @classmethod
+    def categorical(cls):
+        return []
+
+    @classmethod
+    def numerical(cls):
+        return [
+            cls.COLUMN_FEATURE.name,
+            cls.COLUMN_TARGET.name
+        ]
+
+    @classmethod
+    def feature(cls, current_column):
+        """
+        """
+        all = cls.numerical() + cls.categorical()
+        return list(set(all) & set(current_column))
+
 # NOTE: the number in enumerate should correspond to column number it will later replaced
+# all usage should be using its name therefore the column would be full capital
 class CommodityFlow(Enum):
     SHIPMENT_ID = 1
 
@@ -39,48 +129,85 @@ class CommodityFlow(Enum):
     WEIGHT_FACTOR = 20
 
     @classmethod
+    def from_enum(cls, e:str):
+        for member in cls:
+            if member.name == e.upper():
+                return member
+        raise ValueError(f"Cannot find enum with name ")
+
+    @classmethod
     def primary_id(cls):
-        return cls.SHIPMENT_ID
+        return cls.SHIPMENT_ID.name
 
     @classmethod
     def target(cls):
-        return cls.SHIPMENT_VALUE
+        return cls.SHIPMENT_VALUE.name
 
     @classmethod
     def categorical(cls):
         return [
-            cls.ORIGIN_STATE,
-            cls.ORIGIN_DISTRICT,
-            cls.ORIGIN_CFS_AREA,
+            cls.ORIGIN_STATE.name,
+            cls.ORIGIN_DISTRICT.name,
+            cls.ORIGIN_CFS_AREA.name,
 
-            cls.DESTINATION_STATE,
-            cls.DESTINATION_DISTRICT, 
-            cls.DESTINATION_CFS_AREA,
+            cls.DESTINATION_STATE.name,
+            cls.DESTINATION_DISTRICT.name, 
+            cls.DESTINATION_CFS_AREA.name,
 
-            cls.NAICS,
-            cls.QUARTER,
-            cls.SCTG,
-            cls.MODE,
+            cls.NAICS.name,
+            cls.QUARTER.name,
+            cls.SCTG.name,
+            cls.MODE.name,
 
-            cls.EXPORT_COUNTRY,
-            cls.HAZMAT,
+            cls.EXPORT_COUNTRY.name,
+            cls.HAZMAT.name,
         ]
 
     @classmethod
     def numerical(cls):
         return [
-            cls.SHIPMENT_WEIGHT, 
-            cls.SHIPMENT_DISTANCE_CIRCLE,
-            cls.SHIPMENT_DISTANCE_ROUTE,
-            cls.WEIGHT_FACTOR,
-            cls.SHIPMENT_VALUE,
+            cls.SHIPMENT_WEIGHT.name, 
+            cls.SHIPMENT_DISTANCE_CIRCLE.name,
+            cls.SHIPMENT_DISTANCE_ROUTE.name,
+            cls.WEIGHT_FACTOR.name,
+            cls.SHIPMENT_VALUE.name,
         ]
 
     @classmethod
     def feature(cls, current_column):
         """
-        list all feature based on what current existing column.
-        used when we drop some column from the original dataset
         """
         all = cls.numerical() + cls.categorical()
-        return list((set(all) - set([cls.target()])) & set(current_column))
+        return list(set(all) & set(current_column))
+
+
+
+class SampleEnumTransformer(Enum):
+    COLUMN_ID = 1
+    COLUMN_CATEGORICAL = 2
+    COLUMN_NUMERICAL = 3
+    COLUMN_TARGET = 4
+
+    @classmethod
+    def categorical(cls):
+        return [cls.COLUMN_CATEGORICAL.name]
+
+    @classmethod
+    def numerical(cls):
+        return [cls.COLUMN_NUMERICAL.name]
+
+    @classmethod
+    def feature(cls, current_column):
+        alll = cls.numerical() + cls.categorical()
+        return list(set(alll) & set(current_column))
+
+    @classmethod
+    def target(cls):
+        return cls.COLUMN_TARGET.name
+
+    @classmethod
+    def from_enum(cls, e:str):
+        for member in cls:
+            if member.name == e.upper():
+                return member
+        raise ValueError(f"Cannot find enum with name {e}")

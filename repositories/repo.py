@@ -134,8 +134,9 @@ class Facade:
     def load_transformation_instruction(self, run_id: int):
         return self.object_store.load_transformation_instruction(run_id)
     
-    def load_transformation_object(self, run_id: int):
-        return self.object_store.load_transformation_object(run_id)
+    def load_transformation_object(self, run_id: int, transformation_id: str = ""):
+        return self.object_store.load_transformation_object(run_id, transformation_id)
+
     
     def save_model(self, model):
         self.object_store.save_model(self.current_run_id, model)

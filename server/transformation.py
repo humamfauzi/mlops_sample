@@ -1,37 +1,34 @@
 from repositories.repo import Facade
 import pandas as pd
+from enum import Enum
 
 class Transformation:
-    def __init__(self, repository: Facade):
+    def __init__(self, repository: Facade, column_reference: Enum):
         self.repository: Facade = repository
         self.transformations = []
         self.itransformations = []
         self.available_input = []
+        self.column = column_reference
         pass
 
     @classmethod
-    def construct(cls, facade: Facade, run_id: int):
+    def construct(cls, facade: Facade, run_id: int, column_reference: Enum = None):
         instructions = facade.load_transformation_instruction(run_id)
         transformations, itransformations = [], []
-
         for step in instructions:
-            print(step)
-            fobject = facade.load_transformation_object(step.id)
-            def fn(input):
-                selected = input[step.column]
-                selected = fobject.transform(selected)
-                input[step.column] = selected
-                return input
-            transformations.append(fn)
+            fobject = facade.load_transformation_object(run_id, step.id)
             if step.inverse_transform:
-                def ifn(output):
-                    selected = output[step.column]
-                    selected = fobject.inverse_transform(selected)
-                    output[step.column] = selected
-                    return output
-                itransformations.append(ifn)
+                itransformations.append({
+                    "column": step.column,
+                    "function": fobject.object.inverse_transform
+                })
+            else:
+                transformations.append({
+                    "column": step.column,
+                    "function": fobject.object.transform
+                })
 
-        t = cls(facade)
+        t = cls(facade, column_reference)
         t.transformations = transformations
         t.itransformations = itransformations
 
@@ -50,9 +47,16 @@ class Transformation:
         return parsed
 
     def transform(self, input: dict) -> pd.DataFrame:
-        transformed = pd.DataFrame(input)
+        transformed = pd.DataFrame([input])
         for transformation in self.transformations:
-            transformed = transformation(transformed)
+            def transform(row):
+                col = transformation["column"]
+                input = row[col]
+                if col in self.column.numerical():
+                    input = float(input)
+                row[col] = transformation["function"](input)
+                return row
+            transformed = transformed.apply(transform, axis=1)
         return transformed
 
     def inverse_transform(self, output):
@@ -61,6 +65,7 @@ class Transformation:
         """
         inversed = output
         for itransformation in self.itransformations:
-            inversed = itransformation(inversed)
+            # target can only have one column so we only use the function
+            inversed = itransformation["function"](inversed)
         return inversed
 

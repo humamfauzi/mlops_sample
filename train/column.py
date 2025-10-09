@@ -177,8 +177,8 @@ class CommodityFlow(Enum):
     def feature(cls, current_column):
         """
         """
-        all = cls.numerical() + cls.categorical()
-        return list(set(all) & set(current_column))
+        all = set(cls.numerical() + cls.categorical()) - {cls.target()}
+        return list(all & set(current_column))
 
 
 
