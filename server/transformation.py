@@ -10,7 +10,7 @@ class Transformation:
         pass
 
     @classmethod
-    def parse_instruction(cls, facade: Facade, instruction: dict):
+    def construct(cls, facade: Facade, run_id: int):
         transformations = []
         for step in instruction.get("transformation_steps", []):
             pass

@@ -2,7 +2,7 @@ from dataclasses import dataclass, field
 from typing import List, Dict, Any, Optional, Union
 from starlette.responses import JSONResponse
 from abc import ABC, abstractmethod
-import server.model as model
+from server.inference import Inference
 
 class Response(ABC):
     """Base class for all response classes"""
@@ -35,11 +35,11 @@ class HealthResponse(Response):
 class ListResponse(Response):
     """Response structure for the cfs2017 endpoint"""
     message: str
-    data: List[model.ShortDescription] = field(default_factory=list)
+    data: List[dict] = field(default_factory=list)
     def to_dict(self) -> Dict[str, Any]:
         return {
             "message": self.message,
-            "data": [item.to_dict() for item in self.data]
+            "data": self.data
         }
     def to_json_response(self) -> JSONResponse:
         return JSONResponse(status_code=200, content=self.to_dict())

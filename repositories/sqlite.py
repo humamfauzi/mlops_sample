@@ -135,7 +135,7 @@ class SQLiteRepository:
                 SELECT r.id, r.name
                 FROM runs r
                 JOIN tags t ON r.id = t.run_id
-                WHERE r.experiment_id = ? AND t.key = 'status.deployment' AND t.value = 'ready'
+                WHERE r.experiment_id = ? AND t.key = 'status.deployment' AND t.value = 'published'
             '''
             c.execute(query, (experiment_id,))
             results = c.fetchall()

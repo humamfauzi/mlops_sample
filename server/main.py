@@ -1,4 +1,3 @@
-import async_timeout
 import asyncio
 import os
 from fastapi import FastAPI, Request 
@@ -6,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse
-from server.model import Model
+from server.inference import InferenceManager
 import server.response as response
 from typing import Optional
 from contextlib import asynccontextmanager
@@ -24,10 +23,8 @@ class TimeoutMiddleware(BaseHTTPMiddleware):
 
     async def dispatch(self, request: Request, call_next):
         try:
-            # Set the timeout for the request
-            async with async_timeout.timeout(self.timeout):
-                response = await call_next(request)
-                return response
+            response = await asyncio.wait_for(call_next(request), timeout=self.timeout)
+            return response
         except asyncio.TimeoutError:
             return JSONResponse(
                 {"detail": "Request timeout exceeded"}, status_code=504
@@ -35,20 +32,20 @@ class TimeoutMiddleware(BaseHTTPMiddleware):
 
 # a singleton model provider
 # the model would be loaded. Once loaded, it would be accessed via API
-model: Optional[Model] = None
+model: Optional[InferenceManager] = None
 
 @asynccontextmanager
 async def lifespan(app):
     global model
     repo = Facade.parse_instruction({}) # placeholder
-    model = Model(repo).load()
+    model = InferenceManager.parse_instruction(repo, {"experiment_id": os.getenv("EXPERIMENT_ID", "sample")})
     try:
         yield
     finally:
         # optional cleanup on shutdown
         model = None
 
-app = FastAPI()
+app = FastAPI(lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
@@ -86,12 +83,8 @@ async def cfs2017ModelMetadata(request: Request):
 # Primary endpoint for inference using the model
 @app.get("/cfs2017/{model}/inference")
 async def cfs2017ModelInference(request: Request):
-    model = request.path_params["model"]
+    req_model = request.path_params["model"]
     # filter first so any thing that goes to inference model is only
     # what the model requires and discard any extra input
-    q = request.query_params
-    filtered, message = cfs2017.validate_input(model, q)
-    if message != "":
-        return response.ErrorResponse(code=401, message=message).to_json_response()
-    result = cfs2017.infer(model, filtered)
+    result = model.infer(req_model, request.query_params)
     return response.InferenceResponse(message="success", output=result).to_json_response()

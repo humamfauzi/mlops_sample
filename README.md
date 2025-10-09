@@ -56,6 +56,9 @@ source .venv/bin/activate  # On Linux/Mac
 
 # Install dependencies for development
 uv sync --dev
+
+# Run the HTTP server
+uv run uvicorn server.main:app --host 0.0.0.0 --port 8000
 ```
 
 ## Project Dependencies

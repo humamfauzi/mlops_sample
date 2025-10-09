@@ -16,7 +16,7 @@ class InferenceManager:
         pm = repository.get_all_published_models(config.get("experiment_id", "sample"))
         c = cls(repository)
         for m in pm:
-            c.inferences[m.id] = Inference.parse_instruction(m)
+            c.inferences[m.name] = Inference.parse_instruction(repository, m)
         return c
 
     def get_inference(self, model_id: str, input_data: dict):
@@ -40,8 +40,16 @@ class Inference:
         return inverse
 
     @classmethod
-    def parse_instruction(cls, instruction):
-        transformation = Transformation.parse_instruction(instruction.get("transformation", {}))
-        model = Model.parse_instruction(instruction.get("model", {}))
+    def parse_instruction(cls, repository: Facade, run_id: int):
+        transformation = Transformation.construct(repository, run_id)
+        model = Model.construct(repository, run_id)
         return cls(transformation, model)
+
+    def short_description(self):
+        return {
+            "model_id": self.model.experiment_id,
+            "description": self.model.description,
+            "input": [inp.to_dict() for inp in self.transformation.input],
+            "metadata": [meta.to_dict() for meta in self.model.metadata]
+        }
         
