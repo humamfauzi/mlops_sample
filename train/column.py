@@ -133,7 +133,7 @@ class CommodityFlow(Enum):
         for member in cls:
             if member.name == e.upper():
                 return member
-        raise ValueError(f"Cannot find enum with name ")
+        raise ValueError(f"Cannot find enum with name {e}")
 
     @classmethod
     def primary_id(cls):

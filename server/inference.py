@@ -1,6 +1,6 @@
 
 from repositories.repo import Facade
-from column.cfs2017 import TabularColumn # should move this out of cfs2017 file
+from column.cfs2017 import TabularColumn # TODO: should move this out of cfs2017 file
 class InferenceManager:
     """
     Primary class for handling inference requests

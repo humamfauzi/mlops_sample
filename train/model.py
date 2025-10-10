@@ -113,17 +113,17 @@ class ModelTrainer:
             fold=5,
             parameter_grid="exhaustive",
             metrics=[],
-            primary_metrics=""
+            primary_metric=""
         ):
         self.facade: Facade = facade
         self.random_state = random_state
         self.objective = objective
         self.parameter_grid = parameter_grid
         self.fold = fold
-        if primary_metrics == "" or primary_metrics not in metrics:
+        if primary_metric== "" or primary_metric not in metrics:
             raise ValueError("Primary metric must be one of the metrics and not empty")
         self.metrics = metrics
-        self.primary_metrics = primary_metrics
+        self.primary_metric = primary_metric
         self.models = []
         pass
 
@@ -166,7 +166,7 @@ class ModelTrainer:
             return ElasticNet
         elif model_type == "lasso":
             return Lasso
-        elif model_type == "k_neighbors_regressor":
+        elif model_type == "k_nearest_neighbors_regressor":
             return KNeighborsRegressor
         else:
             raise ValueError(f"Model type {model_type} is not supported")
@@ -189,7 +189,7 @@ class ModelTrainer:
         if len(self.models) == 0:
             raise ValueError("No model to compare")
         if self.objective == self.objective_best_model:
-            id = self.facade.find_best_model(self.primary_metrics)
+            id = self.facade.find_best_model(self.primary_metric)
             best_model = self.find_model_by_id(id)
             best_model.set_as_the_best()
             return best_model
@@ -213,4 +213,4 @@ class ModelTrainer:
     def nominate_for_publishing(self, current_score: float, model_id: str):
         intent = self.facade.get_intent()
         _, parent_id = self.facade.get_model_run_id(model_id)
-        self.facade.nominate_for_publishing(intent, self.primary_metrics, current_score, parent_id)
+        self.facade.nominate_for_publishing(intent, self.primary_metric, current_score, parent_id)

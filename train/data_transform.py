@@ -117,7 +117,7 @@ class Transformer:
             for col in step["columns"]:
                 keeper = c.keeper_builder(step["type"], column, col, step["condition"].upper(), count)
                 c.keepers.append(keeper)
-            return c
+        return c
 
     def _save_manifest(self, df: pd.DataFrame):
         if self.facade is None:
@@ -222,6 +222,7 @@ class Transformer:
         append all the new columns and remove the original column
         '''
         for pairs in [train_pair, validation_pair, test_pair]:
+            print(">?>?>?>?>?>?", keeper.column, pairs.X.columns)
             if keeper.column not in pairs.X.columns:
                 raise ValueError(f"column {keeper.column} is not a feature")
             transformed = keeper.function.transform(pairs.X[[keeper.column]])

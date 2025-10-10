@@ -1,7 +1,7 @@
 
 {
-    "name": "base_train",
-    "description": "Base training configuration. Used for testing and debugging pipeline.",
+    "name": "log_transform",
+    "description": "Use one feature. Both feature and target are transformed using log transformation. Testing what happen if we apply log transformation but not normalization. Use small N rows for pipeline sanity check.",
     "repository": {
         "experiment_id": "experiment_001",
         "data": {
@@ -12,8 +12,8 @@
             }
         },
         "object": {
-            "type": "disk",
-            "properties": { "root": "temp/mlops" }
+            "type": "s3",
+            "properties": { "bucket_name": "humamf-artifacts" }
         }
     },
     "instructions": [
@@ -28,7 +28,7 @@
             "call": [
                 {
                     "type": "load",
-                    "n_rows": 1000
+                    "n_rows": 100000
                 }
             ]
         },
@@ -43,15 +43,13 @@
         },
         {
             "type": "data_transformer",
-            "properties": { "type": "lazy_call", "reference": "commodity_flow" },
+            "properties": { 
+                "type": "lazy_call", 
+                "reference": "commodity_flow" 
+            },
             "call": [
                 {
                     "type": "log_transformation",
-                    "condition": "replace",
-                    "columns": ["shipment_weight", "shipment_value"]
-                },
-                {
-                    "type": "normalization",
                     "condition": "replace",
                     "columns": ["shipment_weight", "shipment_value"]
                 }
@@ -59,15 +57,15 @@
         },
         {
             "type": "model_trainer",
-            "properties": {
+            "properties": { 
                 "objective": "best_model",
                 "random_state": 42,
                 "fold": 5,
                 "parameter_grid": {
                     "type": "exhaustive"
                 },
-                "primary_metric": "rmse",
-                "metrics": ["rmse"]
+                "primary_metric": "mse",
+                "metrics": ["mae", "mse", "rmse"]
             },
             "call": [
                 {
@@ -75,23 +73,26 @@
                     "hyperparameters": {}
                 },
                 {
-                    "model_type": "random_forest_regressor",
+                    "model_type": "decision_tree_regressor",
                     "hyperparameters": {
-                        "n_estimators": [50, 100],
-                        "max_depth": [5, 10],
+                        "max_depth": [5, 10, 15],
+                        "min_samples_split": [2, 5, 10],
+                        "min_samples_leaf": [1, 2, 4],
+                        "criterion": ["friedman_mse", "absolute_error"],
                         "random_state": [42]
                     }
                 },
                 {
-                    "model_type": "gradient_boosting_regressor",
+                    "model_type": "k_nearest_neighbors_regressor",
                     "hyperparameters": {
-                        "n_estimators": [50, 100],
-                        "learning_rate": [0.01, 0.1],
-                        "max_depth": [3, 5],
-                        "random_state": [42]
+                        "n_neighbors": [3, 5, 7],
+                        "weights": ["uniform", "distance"],
+                        "algorithm": ["auto", "ball_tree", "kd_tree"],
+                        "p": [1, 2]
                     }
                 }
             ]
         }
     ]
+
 }

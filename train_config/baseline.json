@@ -1,0 +1,91 @@
+{
+    "name": "baseline",
+    "description": "A baseline training configuration for commodity flow dataset. Only uses one, unmodified, feature for prediction. Testing what happen if we dont apply any data transformation. Use small N rows for pipeline sanity check.",
+    "repository": {
+        "experiment_id": "experiment_001",
+        "data": {
+            "type": "sqlite",
+            "properties": { 
+                "name": "example.db",
+                "migrate": true
+            }
+        },
+        "object": {
+            "type": "s3",
+            "properties": { "bucket_name": "humamf-artifacts" }
+        }
+    },
+    "instructions": [
+        {
+            "type": "data_io",
+            "properties": {
+                "path": "dataset",
+                "file": "cfs_2017",
+                "format": "csv",
+                "reference": "commodity_flow"
+            },
+            "call": [
+                {
+                    "type": "load",
+                    "n_rows": 100000
+                }
+            ]
+        },
+        {
+            "type": "data_cleaner",
+            "properties": { "type": "lazy_call",  "reference": "commodity_flow"},
+                
+            "call": [
+                {"type": "filter_columns", "columns": ["shipment_weight", "shipment_value"]},
+                {"type": "drop_na"}
+            ]
+        },
+        {
+            "type": "data_transformer",
+            "properties": { 
+                "type": "lazy_call", 
+                "reference": "commodity_flow" 
+            },
+            "call": []
+        },
+        {
+            "type": "model_trainer",
+            "properties": { 
+                "objective": "best_model",
+                "random_state": 42,
+                "fold": 5,
+                "parameter_grid": {
+                    "type": "exhaustive"
+                },
+                "primary_metric": "mse",
+                "metrics": ["mae", "mse", "rmse"]
+            },
+            "call": [
+                {
+                    "model_type": "linear_regression",
+                    "hyperparameters": {}
+                },
+                {
+                    "model_type": "decision_tree_regressor",
+                    "hyperparameters": {
+                        "max_depth": [5, 10, 15],
+                        "min_samples_split": [2, 5, 10],
+                        "min_samples_leaf": [1, 2, 4],
+                        "criterion": ["friedman_mse", "absolute_error"],
+                        "random_state": [42]
+                    }
+                },
+                {
+                    "model_type": "k_nearest_neighbors_regressor",
+                    "hyperparameters": {
+                        "n_neighbors": [3, 5, 7],
+                        "weights": ["uniform", "distance"],
+                        "algorithm": ["auto", "ball_tree", "kd_tree"],
+                        "p": [1, 2]
+                    }
+                }
+            ]
+        }
+    ]
+
+}
