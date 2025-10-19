@@ -11,20 +11,16 @@ class Disk:
         if not os.path.exists(root):
             os.makedirs(root)
 
-    def save_transformation_instruction(self, instructions: List[TransformationInstruction]):
+    def save_transformation_instruction(self, run_id: int, instructions: List[TransformationInstruction]):
         all_instruction = [inst.to_dict() for inst in instructions]
-        trans_dir = os.path.join(self.root, "transformation")
-        os.makedirs(trans_dir, exist_ok=True)
-        path = os.path.join(trans_dir, "instruction.json")
+        path = os.path.join(self.root, str(run_id), "transformation", "instruction.json")
         with open(path, "w", encoding="utf-8") as f:
             json.dump(all_instruction, f, indent=2, ensure_ascii=False)
         return path
 
 
-    def save_transformation_object(self, transformation_objects: List[TransformationObject]):
-        trans_dir = os.path.join(self.root, "transformation")
-        os.makedirs(trans_dir, exist_ok=True)
-        trans_dir = os.path.join(trans_dir, "objects")
+    def save_transformation_object(self, run_id: int, transformation_objects: List[TransformationObject]):
+        trans_dir = os.path.join(self.root, str(run_id), "transformation", "objects")
         os.makedirs(trans_dir, exist_ok=True)
 
         filenames = []
@@ -53,15 +49,15 @@ class Disk:
         return objects
         
 
-    def save_model(self, model: ModelObject):
-        os.makedirs(os.path.join(self.root, "model"), exist_ok=True)
-        path = os.path.join(self.root, "model", f"{model.filename}.pkl")
+    def save_model(self, run_id:int, model: ModelObject):
+        os.makedirs(os.path.join(self.root, str(run_id), "model"), exist_ok=True)
+        path = os.path.join(self.root, str(run_id), "model", f"{model.filename}.pkl")
         with open(path, "wb") as f:
             pickle.dump(model.object, f, protocol=pickle.HIGHEST_PROTOCOL)
         return path
 
-    def load_model(self, id: str):
-        path = os.path.join(self.root, "model", f"{id}.pkl")
+    def load_model(self, run_id: int, id: str):
+        path = os.path.join(self.root, str(run_id), "model", f"{id}.pkl")
         with open(path, "rb") as f:
             model = pickle.load(f)
             return ModelObject(filename=f"{id}.pkl", object=model)

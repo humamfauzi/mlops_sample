@@ -44,18 +44,7 @@
         {
             "type": "data_transformer",
             "properties": { "type": "lazy_call", "reference": "commodity_flow" },
-            "call": [
-                {
-                    "type": "log_transformation",
-                    "condition": "replace",
-                    "columns": ["shipment_weight", "shipment_value"]
-                },
-                {
-                    "type": "normalization",
-                    "condition": "replace",
-                    "columns": ["shipment_weight", "shipment_value"]
-                }
-            ]
+            "call": []
         },
         {
             "type": "model_trainer",

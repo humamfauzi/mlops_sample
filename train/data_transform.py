@@ -203,6 +203,10 @@ class Transformer:
                 transformed = keeper.function.transform(pairs.X[keeper.column].to_numpy().reshape(-1, 1))
                 pairs.X[keeper.column] = transformed
             else:
+                inverse = getattr(keeper.function, "inverse_transform", None)
+                if not callable(inverse):
+                    err_msg = f"Transformation {keeper.name} does not support inverse_transform and tried to applied in column target"
+                    raise ValueError(err_msg)
                 pairs.y = pd.DataFrame(keeper.function.transform(pairs.y.to_numpy().reshape(-1,1)))
         return self
 
@@ -222,7 +226,6 @@ class Transformer:
         append all the new columns and remove the original column
         '''
         for pairs in [train_pair, validation_pair, test_pair]:
-            print(">?>?>?>?>?>?", keeper.column, pairs.X.columns)
             if keeper.column not in pairs.X.columns:
                 raise ValueError(f"column {keeper.column} is not a feature")
             transformed = keeper.function.transform(pairs.X[[keeper.column]])
@@ -236,6 +239,17 @@ class Transformer:
         return self
 
     def _shape_check(self, train_pair, validation_pair, test_pair):
+        def _shape_check(self, train_pair, validation_pair, test_pair):
+            train_cols = train_pair.X.shape[1]
+            valid_cols = validation_pair.X.shape[1]
+            test_cols = test_pair.X.shape[1]
+
+            if not (train_cols == valid_cols == test_cols):
+                raise ValueError(
+                    f"Feature column count mismatch across splits: "
+                    f"train={train_cols}, valid={valid_cols}, test={test_cols}"
+                )
+            return self
         return self
 
     def _save_transformation(self):

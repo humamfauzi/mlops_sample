@@ -18,16 +18,19 @@ class Transformation:
         for step in instructions:
             fobject = facade.load_transformation_object(run_id, step.id)
             if step.inverse_transform:
-                itransformations.append({
-                    "column": step.column,
-                    "function": fobject.object.inverse_transform
-                })
+                func = getattr(fobject.object, "inverse_transform", None)
+                if callable(func):
+                    itransformations.append({
+                        "column": step.column,
+                        "function": func
+                    })
             else:
-                transformations.append({
-                    "column": step.column,
-                    "function": fobject.object.transform
-                })
-
+                func = getattr(fobject.object, "transform", None)
+                if callable(func):
+                    transformations.append({
+                        "column": step.column,
+                        "function": func
+                    })
         t = cls(facade, column_reference)
         t.transformations = transformations
         t.itransformations = itransformations

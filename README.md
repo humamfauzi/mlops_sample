@@ -255,11 +255,6 @@ logged and normalized.
 11. *FREQUENCY_ORG_DEST* Use the both frequency and mean as origin and destination so we add four more columns and drop all the origin and destination related table. Add weight and shipment value.
 12. Combine 10 and 11
 
-# Plan Guide
-1. Use the first plan for testing only; making sure the pipeline works
-2. Use plan 2 as the baseline; this is the minimum we need to beat
-3. Use plan 3 to see how weight and value related
-4. Use plan 4 to see how NAICS related and how well its contribute compared to plan 3
-
 # Next Iteration
 1. Save model and transformation pickle file as a BLOB in SQLite. Remove S3 dependency.
+2. There is an error that in one hot encoder that was fitted without feature names.

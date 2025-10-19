@@ -175,7 +175,6 @@ class SQLiteRepository:
             '''
             c.execute(query, (intent, experiment_id, f"validation.test.{primary_metric}"))
             result = c.fetchall()
-            print("select_previously_published", intent, experiment_id, primary_metric, result)
             if len(result) == 0:
                 return None, float('inf')
             return result[0]

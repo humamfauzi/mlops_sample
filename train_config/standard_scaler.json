@@ -54,7 +54,7 @@
                     "columns": ["shipment_weight", "shipment_value"]
                 },
                 {
-                    "type": "normalization",
+                    "type": "standardization",
                     "condition": "replace",
                     "columns": ["shipment_weight", "shipment_value"]
                 },
