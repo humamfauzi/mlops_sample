@@ -1,0 +1,97 @@
+name: Build Executable
+
+on:
+  workflow_dispatch:
+    inputs:
+      os_type:
+        description: 'OS to build for'
+        required: false
+        default: 'centos'
+        type: choice
+        options:
+          - 'centos'
+          - 'ubuntu'
+      python_version:
+        description: 'Python version to use'
+        required: false
+        default: '3.11'
+        type: string
+
+jobs:
+  build-centos:
+    if: ${{ inputs.os_type == 'centos' }}
+    runs-on: ubuntu-latest
+    container:
+      image: centos:7  # or centos:stream9 for newer version
+    
+    steps:
+      - name: Install git and dependencies
+        run: |
+          yum install -y git gcc make openssl-devel bzip2-devel libffi-devel zlib-devel wget curl
+      
+      - name: Install Python from source
+        run: |
+          cd /tmp
+          wget https://www.python.org/ftp/python/${{ inputs.python_version }}.0/Python-${{ inputs.python_version }}.0.tgz
+          tar xzf Python-${{ inputs.python_version }}.0.tgz
+          cd Python-${{ inputs.python_version }}.0
+          ./configure --enable-optimizations
+          make altinstall
+          ln -sf /usr/local/bin/python${{ inputs.python_version }} /usr/local/bin/python3
+          ln -sf /usr/local/bin/pip${{ inputs.python_version }} /usr/local/bin/pip3
+      
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Install uv
+        run: |
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+      
+      - name: Install dependencies with uv
+        run: |
+          uv pip install --system pyinstaller
+          uv pip install --system .
+      
+      - name: Build executable with PyInstaller
+        run: |
+          pyinstaller --onefile --name mlops_server server/inference.py
+      
+      - name: Upload executable artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: mlops-executable-centos-${{ github.sha }}
+          path: dist/*
+          retention-days: 30
+
+  build-ubuntu:
+    if: ${{ inputs.os_type == 'ubuntu' }}
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ inputs.python_version }}
+      
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+      
+      - name: Install dependencies with uv
+        run: |
+          uv pip install --system pyinstaller
+          uv pip install --system .
+      
+      - name: Build executable with PyInstaller
+        run: |
+          pyinstaller --onefile --name mlops_server server/inference.py
+      
+      - name: Upload executable artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: mlops-executable-ubuntu-${{ github.sha }}
+          path: dist/*
+          retention-days: 30
