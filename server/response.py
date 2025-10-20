@@ -51,7 +51,7 @@ class MetadataReponse(Response):
     """Content structure for model metadata"""
     message: str
     metadata: List[str]
-    input: List[str]
+    input: List[any]
     description: str
     def to_dict(self) -> Dict[str, Any]:
         return {

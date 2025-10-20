@@ -225,6 +225,13 @@ class SQLiteRepository:
                 return result[0]  # return property value
             return None
 
+    def get_all_properties(self, run_id: int):
+        with sqlite3.connect(self.name) as conn:
+            c = conn.cursor()
+            c.execute('SELECT key, value FROM properties WHERE run_id = ?', (run_id,))
+            results = c.fetchall()
+            return {key: value for key, value in results}
+
     def migrate(self):
         with sqlite3.connect(self.name) as conn:
             c = conn.cursor()

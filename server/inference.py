@@ -2,6 +2,8 @@
 from repositories.repo import Facade
 from column.cfs2017 import TabularColumn # TODO: should move this out of cfs2017 file
 from typing import Dict
+import traceback
+
 class InferenceManager:
     """
     Primary class for handling inference requests
@@ -66,7 +68,7 @@ class Inference:
         transformed = self.transformation.transform(data)
         result = self.model.infer(transformed)
         inverse = self.transformation.inverse_transform(result)
-        return inverse[0]
+        return float(inverse[0])
 
     @classmethod
     def parse_instruction(cls, repository: Facade, run_id: int, name: str = "", column_reference: str = None):
@@ -80,13 +82,14 @@ class Inference:
             "main_id": self.name,
             "model_id": self.model.name,
             "description": self.description,
-            "input": [inp for inp in self.transformation.get_available_input()],
+            "input": [inp.to_dict() for inp in self.transformation.get_available_input()],
         }
 
     def metadata(self):
         return {
             "description": self.description,
-            "input": [inp for inp in self.transformation.get_available_input()],
+            "input": [inp.to_dict() for inp in self.transformation.get_available_input()],
+            "metadata": self.transformation.get_metadata(),
         }
 
     

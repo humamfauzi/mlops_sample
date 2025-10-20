@@ -29,7 +29,6 @@ class Transformation:
         instructions = facade.load_transformation_instruction(run_id)
         transformations, itransformations = [], []
         for step in instructions:
-            print(step)
             fobject = facade.load_transformation_object(run_id, step.id)
             if step.inverse_transform:
                 func = getattr(fobject.object, "inverse_transform", None)
@@ -57,12 +56,18 @@ class Transformation:
 
         available_input = facade.get_available_input(run_id)
         t.available_input = available_input
+        metadata = facade.get_metadata(run_id)
+        t.metadata = metadata
         return t
 
     def get_available_input(self):
         return self.available_input
 
+    def get_metadata(self):
+        return self.metadata
+
     def parse_input(self, input: dict) -> dict:
+        filtered = {}
         for col in self.available_input:
             if col.name not in input:
                 raise UserError(f"Incomplete input data.") \
@@ -81,11 +86,11 @@ class Transformation:
                     raise UserError(f"Unacceptable categorical value for column {col.name}.") \
                         .set_kvs({"invalid_value": sliced, "available_values": col.attributes.available_values}) \
                         .set_http_status(400)
-        return input
+            filtered[col.name] = sliced
+        return filtered
 
     def transform(self, input: dict) -> pd.DataFrame:
         transformed = pd.DataFrame([input])
-        print("before", transformed.to_dict())
         for transformation in self.transformations:
             column = transformation["column"]
             if column in self.column.categorical():
@@ -103,7 +108,6 @@ class Transformation:
                 encoded_columns = transformation["feature_names"]([column])
                 new_columns = pd.DataFrame(appended, columns=encoded_columns, dtype='int', index=transformed.index)
                 transformed = pd.concat([transformed.drop(column, axis=1), new_columns], axis=1)
-        print("after", transformed.to_dict())
         return transformed
             
     def inverse_transform(self, output):
@@ -113,6 +117,6 @@ class Transformation:
         inversed = output
         for itransformation in self.itransformations:
             # target can only have one column so we only use the function
-            inversed = itransformation["function"](inversed)
+            inversed = itransformation["function"](np.array(inversed).reshape(-1, 1))
         return inversed
 

@@ -34,15 +34,25 @@ class NumericalAttributes:
     min: float
     max: float
 
+    def to_dict(self):
+        return { "min": self.min, "max": self.max }
+
 @dataclass
 class CategoricalAttributes:
     available_values: List[str]
+
+    def to_dict(self):
+        return { "available_values": self.available_values }
 
 @dataclass
 class AllowedColumn:
     name: str
     type: str
     attributes: Union[NumericalAttributes, CategoricalAttributes]
+    def to_dict(self):
+        base = { "name": self.name, "type": self.type } 
+        base.update(self.attributes.to_dict())
+        return base
 
 class Facade:
     @classmethod
@@ -271,3 +281,15 @@ class Facade:
         _, name = self.repository.find_tagged_best_model(run_id)
         model =  self.object_store.load_model(run_id, name)
         return model
+    
+    def get_metadata(self, run_id: str):
+        best_child_id, _ = self.repository.find_tagged_best_model(run_id)
+        parent_properties = self.repository.get_all_properties(run_id)
+        child_properties = self.repository.get_all_properties(best_child_id)
+        md = {
+            "parent": parent_properties,
+            "children": child_properties
+        }
+        return md
+
+
