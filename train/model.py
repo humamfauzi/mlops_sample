@@ -120,7 +120,7 @@ class ModelTrainer:
         self.objective = objective
         self.parameter_grid = parameter_grid
         self.fold = fold
-        if primary_metric== "" or primary_metric not in metrics:
+        if primary_metric == "" or primary_metric not in metrics:
             raise ValueError("Primary metric must be one of the metrics and not empty")
         self.metrics = metrics
         self.primary_metric = primary_metric

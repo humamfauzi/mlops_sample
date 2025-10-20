@@ -43,8 +43,8 @@ class Repository:
     def get_intent(self, run_id: int):
         return None
 
-    def get_model_run_id(self, model_id: str):
-        return None
+    def get_model_run_id(self, model_id: str) -> tuple[int, str]:
+        return 0, ""
 
     def select_previously_published(self, experiment_id: str, intent: str, primary_metric: str):
         return None, None

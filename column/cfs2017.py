@@ -57,6 +57,7 @@ class SampleEnum(Enum):
     COLUMN_FEATURE = 2
     COLUMN_FEATURE_DELETED = 3 
     COLUMN_TARGET = 4
+    COLUMN_REMOVED = 5
 
     @classmethod
     def from_enum(cls, e:str):

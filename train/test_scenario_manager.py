@@ -262,7 +262,8 @@ class TestScenarioManager:
                         "parameter_grid": {
                             "type": "exhaustive"
                         },
-                        "metrics": ["rmse"]
+                        "metrics": ["rmse"],
+                        "primary_metric": "rmse"
                     },
                     "call": [
                         {

@@ -77,6 +77,7 @@ class Cleaner(TabularDataCleaner):
     @classmethod
     def parse_instruction(cls, properties: dict, call: list, facade):
         c = cls(facade)
+        # TODO: Adding column should be handled via methods not manual assign
         c.column = TabularColumn.from_string(properties.get("reference"))
         for step in call:
             cols = [c.column.from_enum(col).name for col in step.get("columns", [])]

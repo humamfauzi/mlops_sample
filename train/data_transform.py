@@ -159,7 +159,7 @@ class Transformer:
         Xtr, Xt, ytr, yt = train_test_split(
                 train,
                 test,
-                test_size=0.1,
+                test_size=0.2,
                 random_state=42,
         )
         Xv, Xte, yv, yte = train_test_split(

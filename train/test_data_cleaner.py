@@ -3,14 +3,8 @@ import pandas as pd
 import numpy as np
 
 from copy import copy
-from enum import Enum
 from train.data_cleaner import Cleaner
-
-class SampleEnum(Enum):
-    COLUMN_ID = 1
-    COLUMN_FEATURE = 2
-    COLUMN_TARGET = 3
-    COLUMN_REMOVED = 4
+from column.cfs2017 import SampleEnum
 
 # it means each function call it would recreate the dataframe
 @pytest.fixture(scope="function")
@@ -33,6 +27,7 @@ class TestDataFrameLazyCall:
 
     def test_remove_column_lazy(self, df):
         ddf = Cleaner(None)
+        ddf.column = SampleEnum  # set column enum
         cleaned_df = ddf.remove_columns([SampleEnum.COLUMN_REMOVED]).clean_data(df)
         assert cleaned_df.shape == (4, 2)
         assert cleaned_df.columns[0] == SampleEnum.COLUMN_FEATURE
@@ -40,6 +35,7 @@ class TestDataFrameLazyCall:
 
     def test_remove_nan_rows_lazy(self, df):
         ddf = Cleaner(None)
+        ddf.column = SampleEnum  # set column enum
         cleaned_df = ddf.remove_nan_rows().clean_data(df)
         assert cleaned_df.shape == (3, 3)  # should remove one row with NaN
 
@@ -48,6 +44,7 @@ class TestDataFrameLazyCall:
 
     def test_chain_operations_lazy(self, df):
         ddf = Cleaner(None)
+        ddf.column = SampleEnum  # set column enum
         cleaned_df = (
             ddf
             .remove_columns([SampleEnum.COLUMN_REMOVED])
@@ -60,6 +57,7 @@ class TestDataFrameLazyCall:
 
     def test_filter_columns_lazy(self, df):
         ddf = Cleaner(None)
+        ddf.column = SampleEnum  # set column enum
         cleaned_df = ddf.filter_columns([SampleEnum.COLUMN_FEATURE, SampleEnum.COLUMN_TARGET]).clean_data(df)
         assert cleaned_df.shape == (4, 2)
         assert cleaned_df.columns[0] == SampleEnum.COLUMN_FEATURE
@@ -67,6 +65,7 @@ class TestDataFrameLazyCall:
 
     def test_combined_operations_lazy(self, df):
         ddf = Cleaner(None)
+        ddf.column = SampleEnum  # set column enum
         cleaned_df = (
             ddf
             .filter_columns([SampleEnum.COLUMN_FEATURE, SampleEnum.COLUMN_TARGET, SampleEnum.COLUMN_REMOVED])
