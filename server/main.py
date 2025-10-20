@@ -5,13 +5,14 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse
-from server.inference import InferenceManager
-import server.response as response
-from server.error import UserError
 from typing import Optional
 from contextlib import asynccontextmanager
 from repositories.repo import Facade
 from dotenv import load_dotenv, find_dotenv
+
+import server.response as response
+from server.inference import InferenceManager
+from server.error import UserError
 
 origins = [
     "http://localhost:3000",

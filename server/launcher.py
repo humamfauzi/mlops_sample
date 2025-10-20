@@ -3,11 +3,12 @@ import sys
 import os
 import uvicorn
 
+from server.main import app
+
 # Add the current directory to Python path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 if __name__ == "__main__":
-    from server.main import app
     
     # Read port from environment variable, default to 8000
     port = int(os.getenv("PORT", 8000))

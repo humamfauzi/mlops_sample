@@ -11,10 +11,6 @@ register-dvc-remote:
 	echo "setting dvc remote credential"
 
 
-build-train-module:
-	@echo "Building PyInstaller binary for train/main.py..."
-	mkdir -p dist
-	uv run pyinstaller --onefile --name train_module --distpath ./dist --clean train/main.py
 
 clean-exe:
 	@echo "Cleaning PyInstaller build artifacts..."
@@ -108,6 +104,19 @@ endif
 serve:
 	echo "${STAGE}"
 	uv run uvicorn server.main:app --host 0.0.0.0 --port 8000
+
+build-train-module:
+	@echo "Building PyInstaller binary for train/main.py..."
+	mkdir -p dist
+	uv run pyinstaller --onefile --name train_module --distpath ./dist --clean train/main.py
+
+build-server-module:
+	@echo "Building PyInstaller binary for server/launcher.py..."
+	mkdir -p dist
+	uv run pyinstaller --onefile --name server_module --distpath ./dist --clean \
+		--hidden-import=sklearn.ensemble \
+		--hidden-import=train.wrapper \
+		server/launcher.py
 
 train-all:
 	for file in $(wildcard train_config/*); do \
