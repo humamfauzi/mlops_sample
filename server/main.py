@@ -104,8 +104,7 @@ async def cfs2017ModelMetadata(request: Request):
     dd = model.metadata(model_name=name)
     return response.MetadataReponse(
         message="success", 
-        metadata={},
-        # metadata=dd["metadata"], 
+        metadata=dd["metadata"], 
         input=dd["input"],
         description=dd["description"]
     ).to_json_response()

@@ -232,6 +232,13 @@ class SQLiteRepository:
             results = c.fetchall()
             return {key: value for key, value in results}
 
+    def get_all_metrics(self, run_id: int):
+        with sqlite3.connect(self.name) as conn:
+            c = conn.cursor()
+            c.execute('SELECT key, value FROM metrics WHERE run_id = ?', (run_id,))
+            results = c.fetchall()
+            return {key: value for key, value in results}
+
     def migrate(self):
         with sqlite3.connect(self.name) as conn:
             c = conn.cursor()

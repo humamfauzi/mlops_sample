@@ -281,11 +281,18 @@ class Facade:
         _, name = self.repository.find_tagged_best_model(run_id)
         model =  self.object_store.load_model(run_id, name)
         return model
+
+    def get_all_metrics(self, run_id: str):
+        return self.repository.get_all_metrics(run_id)
     
     def get_metadata(self, run_id: str):
         best_child_id, _ = self.repository.find_tagged_best_model(run_id)
         parent_properties = self.repository.get_all_properties(run_id)
         child_properties = self.repository.get_all_properties(best_child_id)
+        parent_metrics = self.repository.get_all_metrics(run_id)
+        child_metrics = self.repository.get_all_metrics(best_child_id)
+        parent_properties.update({ k: v for k, v in parent_metrics.items() })
+        child_properties.update({ k: v for k, v in child_metrics.items() })
         md = {
             "parent": parent_properties,
             "children": child_properties
