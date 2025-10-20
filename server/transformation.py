@@ -77,12 +77,13 @@ class Transformation:
                 input = transformed[column].astype(str)
             else:
                 input = transformed[column].astype(float)
-            if transformation["method"] == TransformationMethods.REPLACE.name:
+            method = transformation.get("method", "")
+            if method == TransformationMethods.REPLACE.name:
                 transformed[column] = transformation["function"](input.to_numpy().reshape(-1, 1))
-            elif transformation["method"] == TransformationMethods.APPEND.name:
+            elif method == TransformationMethods.APPEND.name:
                 appended = transformation["function"](input.to_numpy().reshape(-1, 1))
                 transformed[f"{column}_{transformation['name']}"] = appended
-            elif transformation["method"] == TransformationMethods.APPEND_AND_REMOVE.name:
+            elif method == TransformationMethods.APPEND_AND_REMOVE.name:
                 appended = transformation["function"](input.to_numpy().reshape(-1, 1))
                 encoded_columns = transformation["feature_names"]([column])
                 new_columns = pd.DataFrame(appended, columns=encoded_columns, dtype='int', index=transformed.index)
