@@ -42,6 +42,7 @@ class Keeper:
     function: any
     method: TransformationMethods
     inverse_transform: bool
+    options: dict = None
 
     def to_dict(self):
         return {
@@ -228,7 +229,7 @@ class Transformer:
         for pairs in [train_pair, validation_pair, test_pair]:
             if keeper.column not in pairs.X.columns:
                 raise ValueError(f"column {keeper.column} is not a feature")
-            transformed = keeper.function.transform(pairs.X[[keeper.column]])
+            transformed = keeper.function.transform(pairs.X[[keeper.column]].to_numpy().reshape(-1, 1))
             encoded_columns = keeper.function.get_feature_names_out([keeper.column])
             new_columns = pd.DataFrame(transformed, columns=encoded_columns, dtype='int', index=pairs.X.index)
             pairs.X = pd.concat([

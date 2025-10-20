@@ -36,9 +36,18 @@ class Cleaner(TabularDataCleaner):
         self.cleaned_data = df.copy()
         for call in self.call_container:
             call()
+        self.reparse_data_type()
         time_ms = int((time.time() - start) * 1000)
         self.write_metadata(time_ms)
         return copy(self.cleaned_data)
+
+    def reparse_data_type(self):
+        for col in self.cleaned_data.columns:
+            if col in self.column.numerical():
+                self.cleaned_data[col] = pd.to_numeric(self.cleaned_data[col], errors='raise')
+            if col in self.column.categorical():
+                self.cleaned_data[col] = self.cleaned_data[col].astype('category')
+        return self
 
     def write_metadata(self, time_ms):
         if self.facade is None:

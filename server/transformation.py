@@ -59,6 +59,7 @@ class Transformation:
                 if col in self.column.numerical():
                     input = float(input)
                 input = np.array(input).reshape(-1, 1)
+                print("Applying transformation on column:", col, "with input:", input)
                 row[col] = transformation["function"](input)
                 return row
             transformed = transformed.apply(transform, axis=1)
