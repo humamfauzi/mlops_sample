@@ -124,7 +124,24 @@ class Transformer:
         if self.facade is None:
             return self
         inputs = set(df.columns.to_list()) - set([self.column.target()])
-        self.facade.set_object_transformation("transformation.allowed_columns", json.dumps(list(inputs)))
+        column_properties = []
+        for col in inputs:
+            if col in self.column.numerical():
+                minn, maxx = df[col].min(), df[col].max()
+                column_properties.append({
+                    "name": col,
+                    "type": "numerical",
+                    "min": int(minn),
+                    "max": int(maxx)
+                })
+            elif col in self.column.categorical():
+                uniques = df[col].unique().tolist()
+                column_properties.append({
+                    "name": col,
+                    "type": "categorical",
+                    "available_values": uniques
+                })
+        self.facade.set_object_transformation("transformation.allowed_columns", json.dumps(column_properties))
         return self
 
     def _split_stage(self, transformed_data: pd.DataFrame):
