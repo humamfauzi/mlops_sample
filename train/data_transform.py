@@ -231,7 +231,6 @@ class Transformer:
             transformed = keeper.function.transform(pairs.X[[keeper.column]])
             encoded_columns = keeper.function.get_feature_names_out([keeper.column])
             new_columns = pd.DataFrame(transformed, columns=encoded_columns, dtype='int', index=pairs.X.index)
-
             pairs.X = pd.concat([
                 pairs.X.drop(columns=[keeper.column]), 
                 new_columns
@@ -239,17 +238,15 @@ class Transformer:
         return self
 
     def _shape_check(self, train_pair, validation_pair, test_pair):
-        def _shape_check(self, train_pair, validation_pair, test_pair):
-            train_cols = train_pair.X.shape[1]
-            valid_cols = validation_pair.X.shape[1]
-            test_cols = test_pair.X.shape[1]
+        train_cols = train_pair.X.shape[1]
+        valid_cols = validation_pair.X.shape[1]
+        test_cols = test_pair.X.shape[1]
 
-            if not (train_cols == valid_cols == test_cols):
-                raise ValueError(
-                    f"Feature column count mismatch across splits: "
-                    f"train={train_cols}, valid={valid_cols}, test={test_cols}"
-                )
-            return self
+        if not (train_cols == valid_cols == test_cols):
+            raise ValueError(
+                f"Feature column count mismatch across splits: "
+                f"train={train_cols}, valid={valid_cols}, test={test_cols}"
+            )
         return self
 
     def _save_transformation(self):

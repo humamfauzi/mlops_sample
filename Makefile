@@ -98,3 +98,19 @@ test-env:
 	@echo "VAR1: $${VAR1}"
 	@echo "VAR2: $${VAR2}"
 	@echo "Other variables as needed..."
+
+## ------------------------------------------------------ NEXT PART 
+ifneq (,$(wildcard .env))
+    include .env
+    export $(shell sed 's/=.*//' .env)
+endif
+
+serve:
+	echo "${STAGE}"
+	uv run uvicorn server.main:app --host 0.0.0.0 --port 8000
+
+train-all:
+	for file in $(wildcard train_config/*); do \
+		echo "Processing $$file"; \
+		uv run python -m train.main $$file; \
+	done;

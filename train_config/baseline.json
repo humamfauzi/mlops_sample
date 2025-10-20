@@ -27,7 +27,7 @@
             "call": [
                 {
                     "type": "load",
-                    "n_rows": 100000
+                    "n_rows": 1000
                 }
             ]
         },

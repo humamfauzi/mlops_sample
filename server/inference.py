@@ -23,7 +23,10 @@ class InferenceManager:
         c = cls(repository, experiment_id, column_reference)
         for m in pm:
             name, id = m["name"], m["id"]
-            c.inferences[name] = Inference.parse_instruction(repository, id, name, column_reference)
+            try:
+                c.inferences[name] = Inference.parse_instruction(repository, id, name, column_reference)
+            except Exception as e:
+                print(f"Error parsing instruction for model {name}: {e}")
         return c
 
     def infer(self, model_name: str, input_data: dict):

@@ -63,7 +63,6 @@ class S3:
 
     def load_transformation_instruction(self, run_id: str):
         key = f"{run_id}/transformation/instruction.json"
-
         response = self.s3_client.get_object(Bucket=self.bucket_name, Key=key)
         data = json.loads(response['Body'].read().decode('utf-8'))
         

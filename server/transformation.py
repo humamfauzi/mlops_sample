@@ -1,5 +1,6 @@
 from repositories.repo import Facade
 import pandas as pd
+import numpy as np
 from enum import Enum
 
 class Transformation:
@@ -57,6 +58,7 @@ class Transformation:
                 input = row[col]
                 if col in self.column.numerical():
                     input = float(input)
+                input = np.array(input).reshape(-1, 1)
                 row[col] = transformation["function"](input)
                 return row
             transformed = transformed.apply(transform, axis=1)

@@ -3,13 +3,13 @@ import uuid
 import json
 
 class SQLiteRepository:
+    """
+    Communication layer with SQLite database for storing and retrieving experiments, runs, tags, metrics, objects, properties, and audit logs.
+    """
     def __init__(self, name='example.db', migrate=False):
         self.name = name
         if migrate:
             self.migrate()
-    """
-    Communication layer with SQLite database for storing and retrieving experiments, runs, tags, metrics, objects, properties, and audit logs.
-    """
     def new_experiment(self, name: str):
         with sqlite3.connect(self.name) as conn:
             id = str(uuid.uuid4())
