@@ -2,6 +2,7 @@ from repositories.repo import Facade
 import pandas as pd
 import numpy as np
 from enum import Enum
+from server.error import UserError
 
 # TODO: Should be generalized for both train and serve modules
 class TransformationMethods(Enum):
@@ -63,10 +64,24 @@ class Transformation:
 
     def parse_input(self, input: dict) -> dict:
         for col in self.available_input:
-            if col not in input:
-                raise ValueError(f"Input data must contain column {col}")
-        parsed = {k: v for k, v in input.items() if k in self.available_input}
-        return parsed
+            if col.name not in input:
+                raise UserError(f"Incomplete input data.") \
+                    .set_kvs({"missing_column": col.name}) \
+                    .set_http_status(400)
+            sliced = input[col.name]
+            if col.type == "numerical":
+                sliced = float(sliced)
+                if sliced > col.attributes.max or sliced < col.attributes.min:
+                    raise UserError(f"Unacceptable numerical value for column {col.name}.") \
+                        .set_kvs({"invalid_value": sliced, "min": col.attributes.min, "max": col.attributes.max}) \
+                        .set_http_status(400)
+            elif col.type == "categorical":
+                sliced = str(sliced)
+                if sliced not in col.attributes.available_values:
+                    raise UserError(f"Unacceptable categorical value for column {col.name}.") \
+                        .set_kvs({"invalid_value": sliced, "available_values": col.attributes.available_values}) \
+                        .set_http_status(400)
+        return input
 
     def transform(self, input: dict) -> pd.DataFrame:
         transformed = pd.DataFrame([input])

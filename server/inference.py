@@ -1,6 +1,7 @@
 
 from repositories.repo import Facade
 from column.cfs2017 import TabularColumn # TODO: should move this out of cfs2017 file
+from typing import Dict
 class InferenceManager:
     """
     Primary class for handling inference requests
@@ -11,7 +12,7 @@ class InferenceManager:
     """
     def __init__(self, repository: Facade, experiment_id: str, column_reference: TabularColumn):
         self.repository: Facade = repository
-        self.inferences = {}
+        self.inferences: Dict[str, Inference] = {}
         self.experiment_id = experiment_id
         self.column_reference = column_reference
 

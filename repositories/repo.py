@@ -6,6 +6,43 @@ from repositories.disk import Disk
 import repositories.noop as noop
 from dataclasses import dataclass
 from typing import List
+from typing import Union, List
+
+# TODO: This data class should be somewhere that accessible for both server, repository, and train
+@dataclass
+class InferenceModelInstruction:
+    id: str # it is a 6 random string of all caps
+
+@dataclass
+class Transformation:
+    id: str
+
+@dataclass
+class InferenceTransformationInstruction:
+    # available column used for parsing from query string to
+    # data transformation input
+    available_column: List[str] # deprecated, in favor of allowed columns
+    steps: List[Transformation]
+
+@dataclass
+class InferenceInstruction:
+    model: InferenceModelInstruction
+    transformation: InferenceTransformationInstruction
+
+@dataclass
+class NumericalAttributes:
+    min: float
+    max: float
+
+@dataclass
+class CategoricalAttributes:
+    available_values: List[str]
+
+@dataclass
+class AllowedColumn:
+    name: str
+    type: str
+    attributes: Union[NumericalAttributes, CategoricalAttributes]
 
 class Facade:
     @classmethod
@@ -214,9 +251,18 @@ class Facade:
         else:
             self.repository.upsert_tag(current_model_id,key, "inferior")
 
-    def get_available_input(self, run_id: int):
-        instruction = self.repository.get_object(run_id, "transformation.allowed_columns")
-        return instruction
+    def get_available_input(self, run_id: int) -> List[AllowedColumn]:
+        allowed_columns = self.repository.get_object(run_id, "transformation.allowed_columns")
+        ac: List[AllowedColumn] = []
+        for i in allowed_columns:
+            if i["type"] == "numerical":
+                attr = NumericalAttributes(min=i["min"], max=i["max"])
+            elif i["type"] == "categorical":
+                attr = CategoricalAttributes(available_values=i["available_values"])
+            else:
+                raise ValueError(f"Unknown allowed column type: {i['type']}")
+            ac.append(AllowedColumn(name=i["name"], type=i["type"], attributes=attr))
+        return ac
 
     def get_run_description(self, run_id: int):
         return self.repository.find_property(run_id, "name.description")
@@ -225,23 +271,3 @@ class Facade:
         _, name = self.repository.find_tagged_best_model(run_id)
         model =  self.object_store.load_model(run_id, name)
         return model
-
-@dataclass
-class InferenceModelInstruction:
-    id: str # it is a 6 random string of all caps
-
-@dataclass
-class Transformation:
-    id: str
-
-@dataclass
-class InferenceTransformationInstruction:
-    # available column used for parsing from query string to
-    # data transformation input
-    available_column: List[str]
-    steps: List[Transformation]
-
-@dataclass
-class InferenceInstruction:
-    model: InferenceModelInstruction
-    transformation: InferenceTransformationInstruction

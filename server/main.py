@@ -7,6 +7,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse
 from server.inference import InferenceManager
 import server.response as response
+from server.error import UserError
 from typing import Optional
 from contextlib import asynccontextmanager
 from repositories.repo import Facade
@@ -115,5 +116,12 @@ async def cfs2017ModelInference(request: Request):
     req_model = request.path_params["model"]
     # filter first so any thing that goes to inference model is only
     # what the model requires and discard any extra input
-    result = model.infer(req_model, request.query_params)
+    result = model.infer(req_model, dict(request.query_params))
     return response.InferenceResponse(message="success", output=result).to_json_response()
+
+@app.exception_handler(UserError)
+async def user_error_handler(_: Request, exc: UserError):
+    return JSONResponse(
+        status_code=exc.http_code,
+        content=exc.to_dict()
+    )
