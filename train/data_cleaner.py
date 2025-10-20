@@ -46,7 +46,10 @@ class Cleaner(TabularDataCleaner):
             if col in self.column.numerical():
                 self.cleaned_data[col] = pd.to_numeric(self.cleaned_data[col], errors='raise')
             if col in self.column.categorical():
-                self.cleaned_data[col] = self.cleaned_data[col].astype('category')
+                # while it is true that pandas has category dtype, but for transferable infomration
+                # between training and server, it is better to use string so it always have same value
+                # categorical value in pandas would translate it to integer to reduce memory usage
+                self.cleaned_data[col] = self.cleaned_data[col].astype('str')
         return self
 
     def write_metadata(self, time_ms):

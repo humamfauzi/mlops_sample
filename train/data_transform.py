@@ -219,7 +219,7 @@ class Transformer:
             if keeper.column not in pairs.X.columns:
                 raise ValueError(f"column {keeper.column} is not a feature")
             transformed = keeper.function.transform(pairs.X[keeper.column].to_numpy().reshape(-1, 1))
-            pairs.X[keeper.column] = transformed
+            pairs.X[f"{keeper.column}_{keeper.name}"] = transformed
         return self
 
     def _append_and_remove(self, keeper, train_pair, validation_pair, test_pair):
