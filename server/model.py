@@ -16,6 +16,5 @@ class Model:
         return c
 
     def infer(self, data):
-        print(">>>>>", data)
         result = self.model.predict(data)
         return result

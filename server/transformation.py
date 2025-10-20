@@ -68,34 +68,6 @@ class Transformation:
         parsed = {k: v for k, v in input.items() if k in self.available_input}
         return parsed
 
-    def transform2(self, input: dict) -> pd.DataFrame:
-        transformed = pd.DataFrame([input])
-        print("before", transformed.to_dict())
-        for transformation in self.transformations:
-            def transform(row):
-                col = transformation["column"]
-                input = row[col]
-                if col in self.column.numerical():
-                    input = float(input)
-                else:
-                    input = str(input)
-                if transformation["method"] == TransformationMethods.REPLACE.name:
-                    row[col] = transformation["function"](np.array([input]).reshape(-1, 1))[0, 0]
-                    return row
-                elif transformation["method"] == TransformationMethods.APPEND.name:
-                    appended = transformation["function"](np.array([input]).reshape(-1, 1))[0, 0]
-                    row[f"{col}_{transformation['name']}"] = appended
-                    return row
-                elif transformation["method"] == TransformationMethods.APPEND_AND_REMOVE.name:
-                    appended = transformation["function"](np.array([input]).reshape(-1, 1))
-                    encoded_columns = transformation["feature_names"]([col])
-                    new_columns = pd.DataFrame(appended, columns=encoded_columns, dtype='int', index=transformed.index)
-                    row = pd.concat([row.drop(col), new_columns], axis=1)
-                    return row
-                return row
-            transformed = transformed.apply(transform, axis=1)
-            print("after", transformed.to_dict())
-        return transformed
     def transform(self, input: dict) -> pd.DataFrame:
         transformed = pd.DataFrame([input])
         print("before", transformed.to_dict())
