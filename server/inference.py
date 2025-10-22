@@ -78,10 +78,11 @@ class Inference:
         return cls(transformation, model, desc, name)
 
     def short_description(self):
+        desc = self.transformation.intent
         return {
             "main_id": self.name,
             "model_id": self.model.name,
-            "description": self.description,
+            "description": desc,
             "input": [inp.to_dict() for inp in self.transformation.get_available_input()],
         }
 

@@ -299,4 +299,7 @@ class Facade:
         }
         return md
 
+    def get_intent(self, run_id: int):
+        return self.repository.find_property(run_id, "name.intent")
+
 
