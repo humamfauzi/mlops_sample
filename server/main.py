@@ -98,6 +98,11 @@ async def cfs2017():
     all_model = model.list()
     return response.ListResponse(message="success", data=all_model).to_json_response()
 
+@app.get("/cfs2017/enum_maps")
+async def cfs2017EnumMaps():
+    enum_maps = model.enum_maps()
+    return response.EnumMapsResponse(message="success", enum_maps=enum_maps).to_json_response()
+
 # Primary endpoint for getting all metadata about the model
 @app.get("/cfs2017/{model}/metadata")
 async def cfs2017ModelMetadata(request: Request):

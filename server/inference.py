@@ -2,6 +2,7 @@
 from repositories.repo import Facade
 from column.cfs2017 import TabularColumn # TODO: should move this out of cfs2017 file
 from typing import Dict
+from server.enum_maps import primary
 import traceback
 
 class InferenceManager:
@@ -42,6 +43,9 @@ class InferenceManager:
 
     def list(self):
         return [inf.short_description() for inf in self.inferences.values()]
+
+    def enum_maps(self):
+        return primary
 
     def get_model_by_name(self, model_name: str):
         return self.inferences.get(model_name, None)

@@ -44,6 +44,19 @@ class ListResponse(Response):
     def to_json_response(self) -> JSONResponse:
         return JSONResponse(status_code=200, content=self.to_dict())
 
+@dataclass
+class EnumMapsResponse(Response):
+    """Response structure for enum maps endpoint"""
+    message: str
+    enum_maps: Dict[str, Dict[str, str]] = field(default_factory=dict)
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "message": self.message,
+            "data": self.enum_maps
+        }
+    def to_json_response(self) -> JSONResponse:
+        return JSONResponse(status_code=200, content=self.to_dict())
+
 _ = ListResponse(message="", data=[])
 
 @dataclass
