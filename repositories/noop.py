@@ -40,7 +40,7 @@ class Repository:
     def get_all_published_candidates(self, experiment_id: str):
         return []
 
-    def get_intent(self, run_id: int):
+    def get_intent(self):
         return None
 
     def get_model_run_id(self, model_id: str) -> tuple[int, str]:

@@ -31,6 +31,7 @@ class InferenceManager:
                 c.inferences[name] = Inference.parse_instruction(repository, id, name, column_reference)
             except Exception as e:
                 print(f"Error parsing instruction for model {name}: {e}")
+                traceback.print_exc()
         return c
 
     def infer(self, model_name: str, input_data: dict):

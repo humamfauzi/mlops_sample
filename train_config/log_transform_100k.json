@@ -1,0 +1,79 @@
+
+{
+    "name": "log_transform_100k",
+    "description": "Use one feature. Both feature and target are transformed using log transformation. Use 100k rows for training.",
+    "repository": {
+        "experiment_id": "experiment_001",
+        "data": {
+            "type": "sqlite",
+            "properties": { 
+                "name": "example.db",
+                "migrate": true
+            }
+        },
+        "object": {
+            "type": "s3",
+            "properties": { "bucket_name": "humamf-artifacts" }
+        }
+    },
+    "instructions": [
+        {
+            "type": "data_io",
+            "properties": {
+                "path": "dataset",
+                "file": "cfs_2017",
+                "format": "csv",
+                "reference": "commodity_flow"
+            },
+            "call": [
+                {
+                    "type": "load",
+                    "n_rows": 1000000
+                }
+            ]
+        },
+        {
+            "type": "data_cleaner",
+            "properties": { "type": "lazy_call",  "reference": "commodity_flow"},
+                
+            "call": [
+                {"type": "filter_columns", "columns": ["shipment_weight", "shipment_value"]},
+                {"type": "drop_na"}
+            ]
+        },
+        {
+            "type": "data_transformer",
+            "properties": { 
+                "type": "lazy_call", 
+                "reference": "commodity_flow" 
+            },
+            "call": [
+                {
+                    "type": "log_transformation",
+                    "condition": "replace",
+                    "columns": ["shipment_weight", "shipment_value"]
+                }
+            ]
+        },
+        {
+            "type": "model_trainer",
+            "properties": { 
+                "objective": "best_model",
+                "random_state": 42,
+                "fold": 5,
+                "parameter_grid": {
+                    "type": "exhaustive"
+                },
+                "primary_metric": "mse",
+                "metrics": ["mae", "mse", "rmse"]
+            },
+            "call": [
+                {
+                    "model_type": "linear_regression",
+                    "hyperparameters": {}
+                }
+            ]
+        }
+    ]
+
+}

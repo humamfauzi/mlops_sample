@@ -63,7 +63,8 @@ class ModelWrapper:
                 start = time.time()
                 if metric in mm:
                     y_pred = self.model.predict(pairs[stage].x_array())
-                    value = mm[metric](pairs[stage].y, y_pred)
+                    y_true = np.array(pairs[stage].y).reshape(-1)
+                    value = mm[metric](y_true, y_pred)
                     duration_ms = (time.time() - start) * 1000.0
                     self.facade.set_validation_time(stage, duration_ms)
                     self.facade.set_metric(stage, metric, value)
@@ -72,7 +73,8 @@ class ModelWrapper:
     def metric_map(self):
         return {
             "mse": mean_squared_error,
-            "rmse": lambda y_true, y_pred: np.sqrt(mean_squared_error(y_true, y_pred))
+            "rmse": lambda y_true, y_pred: np.sqrt(mean_squared_error(y_true, y_pred)),
+            "mae": lambda y_true, y_pred: np.mean(np.abs(y_true - y_pred))
         }
 
     def test(self, pairs: Pairs, metrics: List[str]):
@@ -83,7 +85,8 @@ class ModelWrapper:
         mm = self.metric_map()
         for metric in metrics:
             if metric in mm:
-                value = mm[metric](pairs.test.y, y_pred)
+                y_true = np.array(pairs.test.y).reshape(-1)
+                value = mm[metric](y_true, y_pred)
                 self.facade.set_metric("test", metric, value)
         self.facade.set_validation_time("test", (time.time() - start) * 1000.0)
         return value
@@ -135,6 +138,7 @@ class ModelTrainer:
         return m
 
     def execute(self, input_data: Pairs) -> None:
+        print("Starting model training process...")
         if not isinstance(input_data, Pairs):
             raise TypeError("Input data must be of type Pairs")
         for model in self.models:

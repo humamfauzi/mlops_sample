@@ -58,7 +58,7 @@ class Transformation:
         t.available_input = available_input
         metadata = facade.get_metadata(run_id)
         t.metadata = metadata
-        t.intent = facade.get_intent(run_id)
+        t.intent = facade.get_intent_by_run_id(run_id)
         return t
 
     def get_available_input(self):

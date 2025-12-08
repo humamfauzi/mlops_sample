@@ -278,6 +278,7 @@ class Transformer:
         return self
 
     def execute(self, input_data: pd.DataFrame) -> Pairs:
+        print("Starting data transformation process...")
         # save the transformation manifest
         # contain information about the model input
         self._save_manifest(input_data)

@@ -246,6 +246,9 @@ class Facade:
     def get_intent(self):
         return self.repository.get_intent(self.current_run_id)
 
+    def get_intent_by_run_id(self, run_id: int):
+        return self.repository.get_intent(run_id)
+
     def get_model_run_id(self, model_id: str):
         return self.repository.get_model_run_id(model_id)
 
@@ -298,8 +301,5 @@ class Facade:
             "children": child_properties
         }
         return md
-
-    def get_intent(self, run_id: int):
-        return self.repository.find_property(run_id, "name.intent")
 
 
