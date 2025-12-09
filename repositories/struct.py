@@ -9,6 +9,7 @@ class TransformationInstruction:
     column: str
     method: str
     inverse_transform: bool
+    type: str
 
     def to_dict(self):
         return {
@@ -16,7 +17,8 @@ class TransformationInstruction:
             "name": self.name,
             "column": self.column,
             "method": self.method,
-            "inverse_transform": self.inverse_transform
+            "inverse_transform": self.inverse_transform,
+            "type": self.type,
         }
 
 

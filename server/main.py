@@ -55,9 +55,9 @@ def load_env() -> dict:
             }
         },
         "object": {
-            "type": os.getenv("REPOSITORY_OBJECT", "s3"),
+            "type": os.getenv("REPOSITORY_OBJECT", "sqlite"),
             "properties": {
-                "bucket_name": os.getenv("REPOSITORY_S3_BUCKET", "humamf-artifacts")
+                "name": os.getenv("REPOSITORY_OBJECT_PATH", "example.db")
             }
         }
     }

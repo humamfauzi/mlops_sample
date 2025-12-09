@@ -59,7 +59,7 @@ class Object:
     def load_transformation_instruction(self, run_id: int):
         return None
 
-    def load_transformation_object(self, run_id: int):
+    def load_transformation_object(self, run_id: int, transformation_id: str, ttype: str = ""):
         return None
 
     def save_model(self, run_id: int, model: ModelObject):

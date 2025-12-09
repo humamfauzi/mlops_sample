@@ -29,7 +29,7 @@ class Transformation:
         instructions = facade.load_transformation_instruction(run_id)
         transformations, itransformations = [], []
         for step in instructions:
-            fobject = facade.load_transformation_object(run_id, step.id)
+            fobject = facade.load_transformation_object(run_id, step.id, step.type)
             if step.inverse_transform:
                 func = getattr(fobject.object, "inverse_transform", None)
                 if callable(func):

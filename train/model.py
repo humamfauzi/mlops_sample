@@ -1,5 +1,3 @@
-import random
-import pprint
 from time import time
 import numpy as np
 
@@ -45,7 +43,7 @@ class ModelWrapper:
         start = time.time()
         if not isinstance(pairs, Pairs):
             raise TypeError("Input data must be of type Pairs")
-        self.model.fit(pairs.train.x_array(), np.array(pairs.train.y).reshape(-1,))
+        self.model.fit(pairs.train.X, np.array(pairs.train.y).reshape(-1,))
         end = time.time()
         duration_ms = (end - start) * 1000.0
         self.facade.set_training_time(duration_ms)
@@ -55,14 +53,14 @@ class ModelWrapper:
     def validate(self, pairs: Pairs, metrics: List[str]):
         if not isinstance(pairs, Pairs):
             raise TypeError(f"Input data must be of type Pairs but get {type(pairs)}")
-        y_pred = self.model.predict(pairs.valid.x_array())
+        y_pred = self.model.predict(pairs.valid.X)
         mm = self.metric_map()
         pairs = {"train": pairs.train, "valid": pairs.valid}
         for metric in metrics:
             for stage in ["train", "valid"]:
                 start = time.time()
                 if metric in mm:
-                    y_pred = self.model.predict(pairs[stage].x_array())
+                    y_pred = self.model.predict(pairs[stage].X)
                     y_true = np.array(pairs[stage].y).reshape(-1)
                     value = mm[metric](y_true, y_pred)
                     duration_ms = (time.time() - start) * 1000.0
@@ -81,7 +79,7 @@ class ModelWrapper:
         if not isinstance(pairs, Pairs):
             raise TypeError(f"Input data must be of type Pairs but get {type(pairs)}")
         start = time.time()
-        y_pred = self.model.predict(pairs.test.x_array())
+        y_pred = self.model.predict(pairs.test.X)
         mm = self.metric_map()
         for metric in metrics:
             if metric in mm:

@@ -68,8 +68,8 @@ class S3:
         
         return [TransformationInstruction(**item) for item in data]
 
-    def load_transformation_object(self, run_id: str, transformation_id: str = ""):
-        prefix = f"{run_id}/transformation/objects/{transformation_id}.pkl"
+    def load_transformation_object(self, run_id: str, transformation_id: str = "", ttype: str = ""):
+        prefix = f"{run_id}/transformation/objects/{transformation_id}.{ttype}"
         response = self.s3_client.get_object(Bucket=self.bucket_name, Key=prefix)
         data = pickle.loads(response['Body'].read())
         return TransformationObject(filename=transformation_id, object=data)

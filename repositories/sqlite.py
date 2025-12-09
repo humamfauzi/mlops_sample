@@ -385,8 +385,8 @@ class ObjectStorage:
                 return [TransformationInstruction(**item) for item in data]
             raise ValueError(f"Transformation instruction not found for run id {run_id}")
 
-    def load_transformation_object(self, run_id: str, transformation_id: str = ""):
-        intent = f"{self.INTENT_TRANSFORMATION_OBJECT}/{transformation_id}"
+    def load_transformation_object(self, run_id: str, transformation_id: str = "", ttype: str = ""):
+        intent = f"{self.INTENT_TRANSFORMATION_OBJECT}/{transformation_id}.{ttype}"
         with sqlite3.connect(self.name) as conn:
             c = conn.cursor()
             c.execute('SELECT data FROM blobs WHERE run_id = ? AND intent = ? AND type = ?', 

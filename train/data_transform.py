@@ -42,6 +42,7 @@ class Keeper:
     function: any
     method: TransformationMethods
     inverse_transform: bool
+    type: str
     options: dict = None
 
     def to_dict(self):
@@ -50,7 +51,8 @@ class Keeper:
             "name": self.name,
             "column": self.column,
             "method": self.method.name,
-            "inverse_transform": self.inverse_transform
+            "inverse_transform": self.inverse_transform,
+            "type": self.type
         }
 
 class Transformer:
@@ -72,7 +74,8 @@ class Transformer:
                 column=c,
                 function=ProcessWrapper(np.log, np.exp),
                 method=TransformationMethods[condition],
-                inverse_transform=inverse_transform
+                inverse_transform=inverse_transform,
+                type="pkl",
             ),
             "normalization": lambda: Keeper(
                 id=f"norm-{count:02d}-{col}",
@@ -80,7 +83,8 @@ class Transformer:
                 column=c,
                 function=Normalizer(norm='l2'),
                 method=TransformationMethods[condition],
-                inverse_transform=inverse_transform
+                inverse_transform=inverse_transform,
+                type="pkl",
             ),
             "min_max_transformation": lambda: Keeper(
                 id=f"minmax-{count:02d}-{col}",
@@ -89,6 +93,7 @@ class Transformer:
                 function=MinMaxScaler(),
                 method=TransformationMethods[condition],
                 inverse_transform=inverse_transform,
+                type="pkl",
             ),
             "one_hot_encoding": lambda: Keeper(
                 id=f"ohe-{count:02d}-{col}",
@@ -97,6 +102,7 @@ class Transformer:
                 function=OneHotEncoder(sparse_output=False, handle_unknown='infrequent_if_exist'),
                 method=TransformationMethods.APPEND_AND_REMOVE,
                 inverse_transform=inverse_transform,
+                type="pkl",
             ),
             "standardization": lambda: Keeper(
                 id=f"std-{count:02d}-{col}",
@@ -105,6 +111,7 @@ class Transformer:
                 function=StandardScaler(),
                 method=TransformationMethods[condition],
                 inverse_transform=inverse_transform,
+                type="pkl",
             ),
         }[typee]()
 
