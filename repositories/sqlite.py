@@ -1,6 +1,13 @@
 import sqlite3
 import uuid
 import json
+import io
+import pickle
+import hashlib
+from typing import List
+
+from repositories.struct import ModelObject, TransformationObject
+from .struct import TransformationInstruction, TransformationObject, ModelObject
 
 class SQLiteRepository:
     """
@@ -306,6 +313,114 @@ class SQLiteRepository:
             c.execute('''CREATE INDEX IF NOT EXISTS idx_tags_runid_key ON tags(run_id, key)''')
 
             conn.commit()
+
+class ObjectStorage:
+    # Class constants
+    INTENT_TRANSFORMATION_INSTRUCTION = "transformation_instruction"
+    INTENT_TRANSFORMATION_OBJECT = "transformation_object"
+    INTENT_MODEL = "model"
+
+    TYPE_JSON = "json"
+    TYPE_PICKLE = "pkl"
+    def __init__(self, name='example.db', migrate=False):
+        self.name = name
+        if migrate:
+            self.migrate()
+
+    def migrate(self):
+        with sqlite3.connect(self.name) as conn:
+            c = conn.cursor()
+            c.execute('''CREATE TABLE IF NOT EXISTS blobs (
+                      id INTEGER PRIMARY KEY,
+                      run_id INTEGER,
+                      intent VARCHAR(100),
+                      type VARCHAR(100),
+                      hash VARCHAR(64) UNIQUE,
+                      data BLOB
+            )''')
+
+            c.execute('''CREATE INDEX IF NOT EXISTS idx_blobs_runid_type ON blobs(run_id, type)''')
+            conn.commit()
+
+    def blob_hash(self, data: bytes) -> str:
+        sha256 = hashlib.sha256()
+        sha256.update(data)
+        return sha256.hexdigest()
+
+    def insert_blob(self, run_id: str, intent: str, type: str, data: bytes) -> str:
+        hash_value = self.blob_hash(data)
+        with sqlite3.connect(self.name) as conn:
+            c = conn.cursor()
+            c.execute('INSERT OR IGNORE INTO blobs (run_id, intent, type, hash, data) VALUES (?, ?, ?, ?, ?)',
+                      (run_id, intent, type, hash_value, data))
+            conn.commit()
+        return hash_value
+
+    def save_transformation_instruction(self, run_id: str, instructions: List[TransformationInstruction]):
+        all_instruction = [inst.to_dict() for inst in instructions]
+        json_data = json.dumps(all_instruction, indent=2, ensure_ascii=False)
+        data = json_data.encode('utf-8')
+        return self.insert_blob(run_id, "transformation_instruction", "json", data)
+
+    def save_transformation_object(self, run_id: str, transformation_objects: List[TransformationObject]):
+        blob_hashes = []
+        for obj in transformation_objects:
+            buffer = io.BytesIO()
+            pickle.dump(obj.object, buffer, protocol=pickle.HIGHEST_PROTOCOL)
+            buffer.seek(0)
+            data = buffer.getvalue()
+            intent = f"transformation_object/{obj.filename}"
+            hash_value = self.insert_blob(run_id, intent, "pkl", data)
+            blob_hashes.append((obj.filename, hash_value))
+        return blob_hashes
+
+    def load_transformation_instruction(self, run_id: str):
+        with sqlite3.connect(self.name) as conn:
+            c = conn.cursor()
+            c.execute('SELECT data FROM blobs WHERE run_id = ? AND intent = ? AND type = ?', 
+                      (run_id, self.INTENT_TRANSFORMATION_INSTRUCTION, self.TYPE_JSON))
+            result = c.fetchone()
+            if result:
+                data = json.loads(result[0].decode('utf-8'))
+                return [TransformationInstruction(**item) for item in data]
+            raise ValueError(f"Transformation instruction not found for run id {run_id}")
+
+    def load_transformation_object(self, run_id: str, transformation_id: str = ""):
+        intent = f"{self.INTENT_TRANSFORMATION_OBJECT}/{transformation_id}"
+        with sqlite3.connect(self.name) as conn:
+            c = conn.cursor()
+            c.execute('SELECT data FROM blobs WHERE run_id = ? AND intent = ? AND type = ?', 
+                      (run_id, intent, self.TYPE_PICKLE))
+            result = c.fetchone()
+            if result:
+                data = pickle.loads(result[0])
+                return TransformationObject(filename=transformation_id, object=data)
+            raise ValueError(f"Transformation object {transformation_id} not found for run id {run_id}")
+
+    def save_model(self, run_id:str,  model: ModelObject):
+        # Serialize model using pickle
+        buffer = io.BytesIO()
+        pickle.dump(model.object, buffer, protocol=pickle.HIGHEST_PROTOCOL)
+        buffer.seek(0)
+        data = buffer.getvalue()
+        
+        # Insert into blobs
+        intent = f"{self.INTENT_MODEL}/{model.filename}"
+        return self.insert_blob(run_id, intent, self.TYPE_PICKLE, data)
+    
+    def load_model(self, run_id:str, model_filename: str):
+        intent = f"{self.INTENT_MODEL}/{model_filename}"
+        with sqlite3.connect(self.name) as conn:
+            c = conn.cursor()
+            c.execute('SELECT data FROM blobs WHERE run_id = ? AND intent = ? AND type = ?', 
+                      (run_id, intent, self.TYPE_PICKLE))
+            result = c.fetchone()
+            if result:
+                data = pickle.loads(result[0])
+                return ModelObject(filename=model_filename, object=data)
+            raise ValueError(f"Model {model_filename} not found for run id {run_id}")
+
+
 
 if __name__ == "__main__":
     # manual call for migration

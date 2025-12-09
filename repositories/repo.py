@@ -1,7 +1,8 @@
 import math
 from random import random
 from xml.parsers.expat import model
-from repositories.sqlite import SQLiteRepository
+from repositories.sqlite import SQLiteRepository, ObjectStorage as SQLiteObjectStorage
+from repositories.s3 import S3
 from repositories.disk import Disk
 import repositories.noop as noop
 from dataclasses import dataclass
@@ -71,9 +72,11 @@ class Facade:
             prop = objectt.get("properties", {})
             o = Disk(**prop)
         elif objectt.get("type") == "s3":
-            from repositories.s3 import S3
             prop = objectt.get("properties", {})
             o = S3(**prop)
+        elif objectt.get("type") == "sqlite":
+            prop = objectt.get("properties", {})
+            o = SQLiteObjectStorage(**prop)
         else:
             raise ValueError(f"Unknown object store type: {objectt.get('type')}")
         experiment_id = config.get("experiment_id", "sample")
