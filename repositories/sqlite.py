@@ -335,7 +335,7 @@ class ObjectStorage:
                       run_id INTEGER,
                       intent VARCHAR(100),
                       type VARCHAR(100),
-                      hash VARCHAR(64) UNIQUE,
+                      hash VARCHAR(64),
                       data BLOB
             )''')
 
@@ -351,7 +351,7 @@ class ObjectStorage:
         hash_value = self.blob_hash(data)
         with sqlite3.connect(self.name) as conn:
             c = conn.cursor()
-            c.execute('INSERT OR IGNORE INTO blobs (run_id, intent, type, hash, data) VALUES (?, ?, ?, ?, ?)',
+            c.execute('INSERT INTO blobs (run_id, intent, type, hash, data) VALUES (?, ?, ?, ?, ?)',
                       (run_id, intent, type, hash_value, data))
             conn.commit()
         return hash_value

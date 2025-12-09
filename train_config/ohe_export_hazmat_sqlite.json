@@ -1,7 +1,7 @@
 
 {
-    "name": "ohe_export_hazmat",
-    "description": "Try to incorporate three categorical feature (naics, export, and hazmat) along with log transformation of both feature and target. Use small N rows for pipeline sanity check.",
+    "name": "ohe_export_hazmat_sqlite",
+    "description": "Same as OHE export Hazmat but using SQLite as repository",
     "repository": {
         "experiment_id": "experiment_001",
         "data": {
@@ -30,7 +30,7 @@
             "call": [
                 {
                     "type": "load",
-                    "n_rows": 1000
+                    "n_rows": 1000000
                 }
             ]
         },
@@ -71,32 +71,13 @@
                 "parameter_grid": {
                     "type": "exhaustive"
                 },
-                "primary_metric": "mse",
-                "metrics": ["mae", "mse", "rmse"]
+                "primary_metric": "rmse",
+                "metrics": ["mae", "rmse"]
             },
             "call": [
                 {
                     "model_type": "linear_regression",
                     "hyperparameters": {}
-                },
-                {
-                    "model_type": "decision_tree_regressor",
-                    "hyperparameters": {
-                        "max_depth": [5, 10, 15],
-                        "min_samples_split": [2, 5, 10],
-                        "min_samples_leaf": [1, 2, 4],
-                        "criterion": ["friedman_mse", "absolute_error"],
-                        "random_state": [42]
-                    }
-                },
-                {
-                    "model_type": "k_nearest_neighbors_regressor",
-                    "hyperparameters": {
-                        "n_neighbors": [3, 5, 7],
-                        "weights": ["uniform", "distance"],
-                        "algorithm": ["auto", "ball_tree", "kd_tree"],
-                        "p": [1, 2]
-                    }
                 }
             ]
         }
