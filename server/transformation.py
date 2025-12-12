@@ -54,10 +54,8 @@ class Transformation:
         t.transformations = transformations
         t.itransformations = itransformations
 
-        available_input = facade.get_available_input(run_id)
-        t.available_input = available_input
-        metadata = facade.get_metadata(run_id)
-        t.metadata = metadata
+        t.available_input = facade.get_available_input(run_id)
+        t.metadata = facade.get_metadata(run_id)
         t.intent = facade.get_intent_by_run_id(run_id)
         return t
 

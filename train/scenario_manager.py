@@ -8,6 +8,7 @@ from train.data_io import Disk
 from train.data_cleaner import Cleaner
 from train.data_transform import Transformer
 from train.model import ModelTrainer
+from train.post_test import PostTest
 from repositories.repo import Facade
 from repositories.repo import InferenceInstruction
 
@@ -36,6 +37,7 @@ class InstructionEnum(Enum):
     DATA_CLEANER = "data_cleaner"
     DATA_TRANSFORMER = "data_transformer"
     MODEL_TRAINER = "model_trainer"
+    POST_TEST = "post_test"
 
     @classmethod
     def from_string(cls, value: str):
@@ -68,6 +70,7 @@ class ScenarioManager:
         self.instruction = instruction
         self.pipeline: List[any] = []
         self.facade: Facade = None
+        self.cleaner: Cleaner = None
 
     def construct(self):
         facade = Facade.parse_instruction(self.instruction.repository)
@@ -78,11 +81,15 @@ class ScenarioManager:
             if step.type == InstructionEnum.DATA_IO:
                 self.pipeline.append(Disk.parse_instruction(step.properties, step.call, facade))
             elif step.type == InstructionEnum.DATA_CLEANER:
-                self.pipeline.append(Cleaner.parse_instruction(step.properties, step.call, facade))
+                # TODO: Need to think better way to handle cleaner reference for post test
+                self.cleaner = Cleaner.parse_instruction(step.properties, step.call, facade)
+                self.pipeline.append(self.cleaner)
             elif step.type == InstructionEnum.DATA_TRANSFORMER:
                 self.pipeline.append(Transformer.parse_instruction(step.properties, step.call, facade))
             elif step.type == InstructionEnum.MODEL_TRAINER:
                 self.pipeline.append(ModelTrainer.parse_instruction(step.properties, step.call, facade))
+            elif step.type == InstructionEnum.POST_TEST:
+                self.pipeline.append(PostTest.parse_instruction(step.properties, step.call, self.cleaner, facade))
         self.facade = facade
         return self
 

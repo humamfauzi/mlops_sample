@@ -15,7 +15,7 @@ class TabularColumn(ABC):
     # a training dataset should also have a target
     @classmethod
     @abstractmethod
-    def target(cls):
+    def target(cls) -> str:
         pass
 
     # all tabular dataset either a categorical or numerical

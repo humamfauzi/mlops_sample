@@ -61,7 +61,7 @@ class S3:
             s3_paths.append(f"s3://{self.bucket_name}/{key}")
         return s3_paths
 
-    def load_transformation_instruction(self, run_id: str):
+    def load_transformation_instruction(self, run_id: str) -> List[TransformationInstruction]:
         key = f"{run_id}/transformation/instruction.json"
         response = self.s3_client.get_object(Bucket=self.bucket_name, Key=key)
         data = json.loads(response['Body'].read().decode('utf-8'))

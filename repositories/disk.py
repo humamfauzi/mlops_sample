@@ -32,7 +32,7 @@ class Disk:
         return filenames
 
 
-    def load_transformation_instruction(self):
+    def load_transformation_instruction(self) -> List[TransformationInstruction]:
         path = os.path.join(self.root, "transformation", "instruction.json")
         with open(path, "r", encoding="utf-8") as f:
             data = json.load(f)

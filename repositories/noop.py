@@ -56,7 +56,7 @@ class Object:
     def save_transformation_object(self, run_id: int, transformation_objects: List[TransformationObject]):
         return None
 
-    def load_transformation_instruction(self, run_id: int):
+    def load_transformation_instruction(self, run_id: int) -> List[TransformationInstruction]:
         return None
 
     def load_transformation_object(self, run_id: int, transformation_id: str, ttype: str = ""):

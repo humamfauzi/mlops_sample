@@ -4,6 +4,7 @@ import pandas as pd
 from copy import copy
 from typing import Optional, List
 from train.sstruct import Pairs, Stage, FeatureTargetPair
+import numpy as np
 from train.column import TabularColumn
 from enum import Enum
 import time
@@ -28,6 +29,39 @@ class Disk:
             return copy(raw_data)
         self.loader = loader
         return self
+
+    def load_random_rows_via_csv(self, column: TabularColumn, load_options: dict, n_rows: int, random_state: int = None):
+        """
+        Loads a DataFrame from CSV, picking n_rows randomly from the entire file (not just the first n rows).
+        :param column: TabularColumn for column replacement
+        :param load_options: dict of options for pd.read_csv (excluding nrows and skiprows)
+        :param n_rows: number of random rows to sample
+        :param random_state: random seed for reproducibility
+        """
+        def loader() -> pd.DataFrame:
+            csv_path = f"{self.path}/{self.name}.csv"
+            # First, count the number of lines (excluding header)
+            with open(csv_path, 'r') as f:
+                total_lines = sum(1 for _ in f) - 1
+            if n_rows > total_lines:
+                raise ValueError(f"Requested n_rows={n_rows} but file only has {total_lines} rows.")
+            skiprows = self.generate_skiprows_function(total_lines, n_rows, random_state)
+            raw_data = pd.read_csv(csv_path, skiprows=skiprows, **load_options)
+            raw_data = self._replace_columns(raw_data, column)
+            return copy(raw_data)
+        self.loader = loader
+        return self
+
+    def generate_skiprows_function(self, total_lines: int, n_rows: int, random_state: int = None):
+        if n_rows > total_lines:
+            raise ValueError(f"Requested n_rows={n_rows} but file only has {total_lines} rows.")
+        rng = np.random.default_rng(random_state)
+        chosen = set(rng.choice(total_lines, n_rows, replace=False) + 1)
+        skip = set(range(1, total_lines + 1)) - chosen
+        def skiprows(i):
+            return i in skip and i != 0
+        return skiprows
+
 
     def write_metadata(self, raw_data, time_ms):
         if self.facade is None:

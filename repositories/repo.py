@@ -2,6 +2,7 @@ import math
 from random import random
 from xml.parsers.expat import model
 from repositories.sqlite import SQLiteRepository, ObjectStorage as SQLiteObjectStorage
+from repositories.struct import TransformationInstruction, TransformationObject, ModelObject
 from repositories.s3 import S3
 from repositories.disk import Disk
 import repositories.noop as noop
@@ -120,6 +121,14 @@ class Facade:
         self.repository.new_property(self.current_run_id, "size.load.row", str(size))
         return self
 
+    def set_post_test_row_size(self, run_id: str, size: int):
+        self.repository.new_property(run_id, "size.post_test.row", str(size))
+        return self
+
+    def set_post_test_intent(self, run_id: str, intent: str):
+        self.repository.new_property(run_id, "name.post_test.intent", intent)
+        return self
+
     def set_column_size(self, size: int):
         self.repository.new_property(self.current_run_id, "size.load.column", str(size))
         return self
@@ -181,7 +190,7 @@ class Facade:
         self.object_store.save_transformation_object(self.current_run_id, transformation_objects)
         return self
     
-    def load_transformation_instruction(self, run_id: int):
+    def load_transformation_instruction(self, run_id: int) -> List[TransformationInstruction]:
         return self.object_store.load_transformation_instruction(run_id)
     
     def load_transformation_object(self, run_id: int, transformation_id: str = "", ttype: str = ""):

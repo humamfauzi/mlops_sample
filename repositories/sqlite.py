@@ -374,7 +374,7 @@ class ObjectStorage:
             blob_hashes.append((obj.filename, hash_value))
         return blob_hashes
 
-    def load_transformation_instruction(self, run_id: str):
+    def load_transformation_instruction(self, run_id: str) -> List[TransformationInstruction]:
         with sqlite3.connect(self.name) as conn:
             c = conn.cursor()
             c.execute('SELECT data FROM blobs WHERE run_id = ? AND intent = ? AND type = ?', 
