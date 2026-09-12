@@ -12,6 +12,31 @@ from sklearn import metrics as mm
 # TODO: should be generalized for all tabular column
 from column.cfs2017 import TabularColumn
 
+DEFAULT_N_SAMPLES = 1000
+DEFAULT_SEED = 42
+
+# `check_against` selects what a prediction is compared against. Only comparing
+# against the row's own actual target is implemented; "random" was the value
+# the existing configs used to describe their *sampling*, so it is accepted as
+# an alias rather than silently ignored.
+_SUPPORTED_CHECK_AGAINST = ("actual_value", "random")
+
+
+def _resolve(call_value, properties_value, default):
+    """A step's `call` wins over its `properties`, then the default.
+
+    Reading the sample size from `properties` alone was a silent trap: no
+    config in train_config/ sets `properties.n_rows`, so every post_test
+    measured 1000 rows while recording `n_samples` from the call -- 100000 --
+    in `size.post_test.row`.
+    """
+    if call_value is not None:
+        return int(call_value)
+    if properties_value is not None:
+        return int(properties_value)
+    return default
+
+
 @dataclass
 class Config:
     intent: str
@@ -51,21 +76,24 @@ class PostTest:
     def parse_instruction(cls, properties: dict, call: List[dict],cleaner: Cleaner,  facade: Facade ):
         configs = []
         for c in call:
+            check_against = c.get("check_against", "actual_value")
+            if check_against not in _SUPPORTED_CHECK_AGAINST:
+                raise ValueError(
+                    f"post_test check_against {check_against!r} is not supported; "
+                    f"expected one of {list(_SUPPORTED_CHECK_AGAINST)}"
+                )
             configs.append(Config(
                 intent=c.get("intent", ""),
-                check_against=c.get("check_against", "actual_value"),
-                n_samples=c.get("n_samples", 1000),
+                check_against=check_against,
+                n_samples=_resolve(c.get("n_samples"), properties.get("n_rows"), DEFAULT_N_SAMPLES),
                 metrics=c.get("metrics", ["mse", "rmse"]),
-                seed=c.get("seed", 42)
+                seed=_resolve(c.get("seed"), properties.get("random_state"), DEFAULT_SEED),
             ))
+        if not configs:
+            raise ValueError("post_test requires at least one entry in its call list")
+
         column = TabularColumn.from_string(properties.get("reference"))
         loader = Disk(facade, properties.get("path", ""), properties.get("file", ""))
-        loader.load_random_rows_via_csv(
-            column=column,
-            n_rows=properties.get("n_rows", 1000),
-            random_state=properties.get("random_state", 42),
-            load_options={}
-        )
         return cls(
             configs=configs,
             facade=facade,
@@ -116,7 +144,24 @@ class PostTest:
         model = self.facade.get_model_best_model(run_id).object
         return Inference(transformations=transformation, model=model)
 
-    def pick_random_samples(self) -> pd.DataFrame:
+    def pick_random_samples(self, n_samples: int = None, seed: int = None) -> pd.DataFrame:
+        """Draw a random sample and run it through the run's cleaner.
+
+        The sample size and seed come from the post_test step's `call`, so the
+        metric reflects what the config asked for. They used to be taken from
+        `properties`, which no config sets, so every measurement silently fell
+        back to the loader default of 1000 rows.
+        """
+        if n_samples is None:
+            n_samples = self.configs[0].n_samples
+        if seed is None:
+            seed = self.configs[0].seed
+        self.loader.load_random_rows_via_csv(
+            column=self.column,
+            n_rows=n_samples,
+            random_state=seed,
+            load_options={},
+        )
         return self.cleaner.execute(self.loader.execute(None))
 
     def check(self, inference: Inference, samples: pd.DataFrame, metrics: List[str]) -> dict:
@@ -177,7 +222,8 @@ class PostTest:
             self.facade.set_post_test_intent(run_id, pt.intent)
 
             inference_machine = self.reconstruct_inference(run_id)
-            samples = self.pick_random_samples()
+            samples = self.pick_random_samples(pt.n_samples, pt.seed)
+            print(f"Post Test: {len(samples)} rows sampled from {pt.n_samples} drawn (seed {pt.seed})")
             result = self.check(inference_machine, samples, pt.metrics)
             self.store_metrics(result)
 

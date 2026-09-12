@@ -1,6 +1,6 @@
 {
-    "name": "post_test_log_gboosting",
-    "description": "Segment: air freight shipments (MODE=04 parcel-air, MODE=05 other air). Train a dedicated model on this dominant segment (~70% of dataset) which spans a wide value range and drives most of the overall MAE.",
+    "name": "post_test_log_gboosting_air",
+    "description": "Segment: air freight shipments (MODE=04 parcel-air, MODE=05 other air). Train a dedicated model on this dominant segment (~70% of dataset) which spans a wide value range and drives most of the overall MAE. Intent: post_test_log_gboosting_air (segment-scoped, so it does not compete with the whole-population post_test_log_gboosting family).",
     "instructions": [
         {
             "type": "data_io",

@@ -133,6 +133,10 @@ class Transformer:
         categorical. A column in none of those buckets used to be dropped
         silently, which produced a model the server could never feed -- the
         failure only appeared at inference time, long after training.
+
+        The order comes from ``column.feature``, the same call that selects the
+        training matrix, so the manifest cannot disagree with the column order
+        the model was fitted on.
         """
         if self.facade is None:
             return self
@@ -157,7 +161,7 @@ class Transformer:
                 f"produce a model the server cannot feed."
             )
 
-        inputs = [col for col in df.columns if col not in (target, primary_id)]
+        inputs = self.column.feature(df.columns)
         column_properties = []
         for col in inputs:
             if col in numerical:

@@ -39,15 +39,19 @@ def write_csv(path: pathlib.Path, seed: int = 42) -> None:
     """Synthetic data with a genuine signal, so the model beats a constant."""
     rng = random.Random(seed)
     path.parent.mkdir(parents=True, exist_ok=True)
-    lines = ["id,categorical,numerical,target"]
+    lines = ["id,categorical,numerical,numerical_b,target"]
     for i in range(1, N_ROWS + 1):
         cat = CATEGORIES[i % len(CATEGORIES)]
         numerical = max(1.0, rng.gauss(500, 120))
+        numerical_b = max(1.0, rng.gauss(50, 15))
         # multiplicative relationship -> log-space linear, which is what the
-        # pipeline's log transform is designed to exploit
+        # pipeline's log transform is designed to exploit. `numerical_b` is
+        # here so the schema has two numerical columns: with only one, the
+        # manifest order and the training matrix order cannot differ, and a
+        # train/serve column-ordering regression would go undetected.
         factor = {"A": 2.0, "B": 3.0, "C": 5.0, "D": 7.0}[cat]
-        target = max(1.0, numerical * factor * rng.gauss(1.0, 0.05))
-        lines.append(f"{i},{cat},{numerical:.4f},{target:.4f}")
+        target = max(1.0, numerical * numerical_b / 50.0 * factor * rng.gauss(1.0, 0.05))
+        lines.append(f"{i},{cat},{numerical:.4f},{numerical_b:.4f},{target:.4f}")
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
@@ -76,8 +80,19 @@ def build_config(db_path: pathlib.Path, dataset_dir: pathlib.Path) -> dict:
                 "properties": {"type": "lazy_call", "reference": "sample_enum_transformer"},
                 "call": [
                     {
+                        # Deliberately lists the two numerical columns in the
+                        # opposite order to SampleEnumTransformer.numerical().
+                        # The manifest is built from the schema, so if anything
+                        # ever builds it from the dataframe instead, the model
+                        # is fitted on one column order and asked to predict on
+                        # another. Keep this order.
                         "type": "filter_columns",
-                        "columns": ["column_categorical", "column_numerical", "column_target"],
+                        "columns": [
+                            "column_categorical",
+                            "column_numerical_b",
+                            "column_numerical",
+                            "column_target",
+                        ],
                     },
                     {"type": "drop_na"},
                 ],
@@ -89,7 +104,7 @@ def build_config(db_path: pathlib.Path, dataset_dir: pathlib.Path) -> dict:
                     {
                         "type": "log_transformation",
                         "condition": "replace",
-                        "columns": ["column_numerical", "column_target"],
+                        "columns": ["column_numerical", "column_numerical_b", "column_target"],
                     },
                     {
                         "type": "one_hot_encoding",

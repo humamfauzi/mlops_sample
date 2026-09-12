@@ -183,3 +183,84 @@ class TestDataTransformLazyCall:
         # while it seems random, it is not. because when splitting we set the random seed
         # therefore any test picking index 0 should always be the same
         assert pairs.train.X.loc[0][SampleEnum.COLUMN_CATEGORICAL.name + '_b'] == 0
+
+class TestFeatureOrdering:
+    """The column order a model is fitted on must be reproducible at inference.
+
+    `feature()` used a set intersection, so its order depended on string
+    hashing -- which varies with PYTHONHASHSEED between processes. The manifest
+    that the inference path replays was built the same way, so the two agreed
+    by accident. Rebuilding the manifest from dataframe order instead broke
+    that agreement and made every newly trained model fail at predict time
+    with "feature names should match those that were passed during fit".
+
+    scripts/smoke_test.sh now catches it, because the fixture's
+    filter_columns lists its numerical columns in the opposite order to the
+    schema. These tests pin the invariant directly.
+    """
+
+    def test_feature_order_ignores_the_input_order(self):
+        a = CommodityFlow.feature(["SCTG", "NAICS", "SHIPMENT_WEIGHT"])
+        b = CommodityFlow.feature(["SHIPMENT_WEIGHT", "NAICS", "SCTG"])
+
+        assert a == b
+
+    def test_feature_order_follows_the_schema(self):
+        everything = [m.name for m in CommodityFlow]
+        expected = [
+            c for c in CommodityFlow.numerical() + CommodityFlow.categorical()
+            if c != CommodityFlow.target()
+        ]
+
+        assert CommodityFlow.feature(everything) == expected
+
+    def test_feature_order_is_stable_across_repeated_calls(self):
+        cols = ["SHIPMENT_WEIGHT", "NAICS", "MODE", "SCTG", "SHIPMENT_DISTANCE_ROUTE"]
+
+        assert CommodityFlow.feature(cols) == CommodityFlow.feature(cols)
+
+    def test_target_is_never_a_feature(self):
+        for enum in (CommodityFlow, SampleEnum, FixtureEnum):
+            assert enum.target() not in enum.feature([m.name for m in enum])
+
+    def test_manifest_follows_the_schema_not_the_dataframe(self):
+        # Two numerical columns, listed in the frame in the opposite order to
+        # the schema. The manifest must come out in schema order, because that
+        # is the order _split_stage uses to build X.
+        frame = pd.DataFrame({
+            SampleEnum.COLUMN_NUMERICAL_B.name: np.arange(1.0, 11.0),
+            SampleEnum.COLUMN_NUMERICAL.name: np.arange(11.0, 21.0),
+            SampleEnum.COLUMN_TARGET.name: np.arange(21.0, 31.0),
+        })
+        facade = RecordingFacade()
+
+        Transformer(facade, SampleEnum)._save_manifest(frame)
+
+        names = [c["name"] for c in facade.manifest()]
+        assert names == [SampleEnum.COLUMN_NUMERICAL.name, SampleEnum.COLUMN_NUMERICAL_B.name]
+        assert names == SampleEnum.feature(frame.columns)
+
+    def test_the_smoke_fixture_still_distinguishes_the_two_orders(self):
+        # The smoke test only catches a column-ordering regression while the
+        # fixture's dataframe order differs from its schema order. If those
+        # converge, the guard silently stops testing anything.
+        import importlib.util
+        import pathlib
+
+        root = pathlib.Path(__file__).resolve().parent.parent
+        spec = importlib.util.spec_from_file_location(
+            "make_fixture_db", root / "scripts" / "make_fixture_db.py")
+        fixture = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(fixture)
+
+        cfg = fixture.build_config(pathlib.Path("fixture.db"), pathlib.Path("dataset"))
+        cleaner = next(s for s in cfg["instructions"] if s["type"] == "data_cleaner")
+        configured = cleaner["call"][0]["columns"]
+
+        # what the fixture actually lists, uppercased, minus the target
+        upper = [c.upper() for c in configured if c != "column_target"]
+        assert upper != SampleEnum.feature(upper), (
+            "the smoke fixture now lists its columns in schema order, so it can "
+            "no longer detect a train/serve column-ordering regression"
+        )
+        assert set(upper) <= set(m.name for m in SampleEnum)

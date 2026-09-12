@@ -273,3 +273,87 @@ class TestUnimplementedOptions:
         )
 
         assert len(transformer.keepers) == 1
+
+
+class TestHistGradientBoosting:
+    """Phase B: the histogram GBM is what makes a grid affordable.
+
+    Classic GradientBoostingRegressor took 173s for a single 200-tree/depth-5
+    fit on 559k rows, which is why the published champion is capacity-starved.
+    """
+
+    def test_routing_returns_the_histogram_estimator(self):
+        from sklearn.ensemble import HistGradientBoostingRegressor
+
+        facade = RecordingFacade()
+        trainer = ModelTrainer(facade, metrics=["mae"], primary_metric="mae")
+
+        assert trainer.model_routing("hist_gradient_boosting_regressor") is (
+            HistGradientBoostingRegressor
+        )
+
+    def test_documented_hyperparameters_are_accepted(self):
+        # The names differ from the classic GBM: max_iter, not n_estimators;
+        # no subsample. Getting this wrong fails at fit time, not parse time.
+        facade = RecordingFacade()
+        trainer = ModelTrainer(facade, metrics=["mae"], primary_metric="mae")
+
+        models = trainer.generate_model(
+            "hist_gradient_boosting_regressor",
+            {
+                "loss": ["absolute_error"],
+                "max_iter": [50],
+                "learning_rate": [0.1],
+                "max_leaf_nodes": [31],
+                "min_samples_leaf": [20],
+                "early_stopping": [False],
+                "random_state": [42],
+            },
+            "exhaustive",
+        )
+
+        assert len(models) == 1
+
+    def test_rejects_the_classic_gbm_spelling(self):
+        # A config written for the classic GBM must fail loudly rather than
+        # silently train something unexpected.
+        facade = RecordingFacade()
+        trainer = ModelTrainer(facade, metrics=["mae"], primary_metric="mae")
+
+        with pytest.raises(TypeError):
+            trainer.generate_model(
+                "hist_gradient_boosting_regressor",
+                {"n_estimators": [100], "subsample": [0.8]},
+                "exhaustive",
+            )
+
+    def test_trains_and_predicts(self):
+        from sklearn.ensemble import HistGradientBoostingRegressor
+
+        facade = RecordingFacade()
+        wrapper = ModelWrapper(
+            "hist_gradient_boosting_regressor",
+            HistGradientBoostingRegressor(max_iter=20, early_stopping=False, random_state=0),
+            {},
+            "RUN001",
+            facade,
+        )
+        pairs = make_pairs()
+
+        wrapper.train(pairs)
+        score = wrapper.test(pairs, ["mae"])
+
+        assert facade.training_type == "hist_gradient_boosting_regressor"
+        assert score["mae"] >= 0
+
+    def test_grid_expands_over_multiple_values(self):
+        facade = RecordingFacade()
+        trainer = ModelTrainer(facade, metrics=["mae"], primary_metric="mae")
+
+        models = trainer.generate_model(
+            "hist_gradient_boosting_regressor",
+            {"loss": ["squared_error", "absolute_error"], "max_iter": [100, 200]},
+            "exhaustive",
+        )
+
+        assert len(models) == 4

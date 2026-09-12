@@ -185,7 +185,7 @@ class TestScenarioManager:
                             "columns": ["column_feature", "column_target"]
                         },
                         {
-                            "type": "normalization",
+                            "type": "standardization",
                             "condition": "replace",
                             "columns": ["column_feature", "column_target"]
                         }
@@ -201,7 +201,11 @@ class TestScenarioManager:
         assert result is not None
         assert isinstance(result, Pairs)
         assert isinstance(result.train, FeatureTargetPair)
-        assert result.train.X.shape == (8, 2)
+        # One feature column, not two: SampleEnum.feature() excludes the target.
+        # It used to include it, which leaked the label into X and masked the
+        # fact that this config L2-normalised the target -- a transform with no
+        # inverse, so a prediction could never be mapped back to dollars.
+        assert result.train.X.shape == (8, 1)
 
     def test_data_disk_clean_transform_train(self, sample_csv_path):
         base = {
@@ -247,7 +251,7 @@ class TestScenarioManager:
                             "columns": ["column_feature", "column_target"]
                         },
                         {
-                            "type": "normalization",
+                            "type": "standardization",
                             "condition": "replace",
                             "columns": ["column_feature", "column_target"]
                         }

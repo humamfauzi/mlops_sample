@@ -89,10 +89,19 @@ class SampleEnum(Enum):
 
     @classmethod
     def feature(cls, current_column):
+        """Feature columns present in current_column, in schema order.
+
+        The order is load-bearing: a model is fitted on these columns in this
+        order, and the inference path replays it. Building it from a set
+        intersection made the order depend on string hashing, which varies with
+        PYTHONHASHSEED between processes -- so a model could be fitted on one
+        column order and asked to predict on another.
         """
-        """
-        all = cls.numerical() + cls.categorical()
-        return list(set(all) & set(current_column))
+        present = set(current_column)
+        return [
+            col for col in cls.numerical() + cls.categorical()
+            if col in present and col != cls.target()
+        ]
 
 # NOTE: the number in enumerate should correspond to column number it will later replaced
 # all usage should be using its name therefore the column would be full capital
@@ -187,13 +196,17 @@ class CommodityFlow(Enum):
     @classmethod
     def feature(cls, current_column):
         """
-        Feature columns present in current_column.
+        Feature columns present in current_column, in schema order.
 
         The target is excluded: leaving it in would put the label in X and leak
-        it straight into training.
+        it straight into training. See SampleEnum.feature for why the order is
+        deterministic rather than set-derived.
         """
-        all = set(cls.numerical() + cls.categorical()) - {cls.target()}
-        return list(all & set(current_column))
+        present = set(current_column)
+        return [
+            col for col in cls.numerical() + cls.categorical()
+            if col in present and col != cls.target()
+        ]
 
 
 
@@ -201,10 +214,15 @@ class SampleEnumTransformer(Enum):
     # Positional schema for the synthetic smoke-test fixture. Every member must
     # be classified as the id, the target, numerical or categorical -- the
     # manifest builder rejects a column it cannot account for.
+    #
+    # Two numerical columns, deliberately. With only one, the feature order in
+    # the manifest and in the training matrix cannot differ, so the fixture
+    # could not catch a train/serve column-ordering regression.
     COLUMN_ID = 1
     COLUMN_CATEGORICAL = 2
     COLUMN_NUMERICAL = 3
-    COLUMN_TARGET = 4
+    COLUMN_NUMERICAL_B = 4
+    COLUMN_TARGET = 5
 
     @classmethod
     def primary_id(cls):
@@ -216,12 +234,15 @@ class SampleEnumTransformer(Enum):
 
     @classmethod
     def numerical(cls):
-        return [cls.COLUMN_NUMERICAL.name]
+        return [cls.COLUMN_NUMERICAL.name, cls.COLUMN_NUMERICAL_B.name]
 
     @classmethod
     def feature(cls, current_column):
-        alll = cls.numerical() + cls.categorical()
-        return list(set(alll) & set(current_column))
+        present = set(current_column)
+        return [
+            col for col in cls.numerical() + cls.categorical()
+            if col in present and col != cls.target()
+        ]
 
     @classmethod
     def target(cls):

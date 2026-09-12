@@ -1,6 +1,6 @@
 {
-    "name": "post_test_log_gboosting",
-    "description": "Segment: bulk and specialized freight (MODE=02 private truck, 06 rail, 07 water, 08 pipeline, 11 other, 12 air+truck, 15 unknown, 16 multimodal). Train a dedicated model on this low-volume, high-value segment that contributes disproportionately to overall MAE.",
+    "name": "post_test_log_gboosting_bulk",
+    "description": "Segment: bulk and specialized freight (MODE=02 private truck, 06 rail, 07 water, 08 pipeline, 11 other, 12 air+truck, 15 unknown, 16 multimodal). Train a dedicated model on this low-volume, high-value segment that contributes disproportionately to overall MAE. Intent: post_test_log_gboosting_bulk (segment-scoped, so it does not compete with the whole-population post_test_log_gboosting family).",
     "instructions": [
         {
             "type": "data_io",

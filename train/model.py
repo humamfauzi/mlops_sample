@@ -4,7 +4,11 @@ import numpy as np
 from abc import ABC, abstractmethod
 from sklearn.linear_model import LinearRegression, ElasticNet, Lasso
 from sklearn.tree import DecisionTreeRegressor
-from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor
+from sklearn.ensemble import (
+    GradientBoostingRegressor,
+    HistGradientBoostingRegressor,
+    RandomForestRegressor,
+)
 from sklearn.neighbors import KNeighborsRegressor
 from sklearn.metrics import mean_squared_error
 
@@ -175,6 +179,13 @@ class ModelTrainer:
             return DecisionTreeRegressor
         elif model_type == "gradient_boosting_regressor":
             return GradientBoostingRegressor
+        elif model_type == "hist_gradient_boosting_regressor":
+            # Histogram-based GBM: roughly two orders of magnitude faster than
+            # GradientBoostingRegressor at this scale, with built-in early
+            # stopping. Note the hyperparameter names differ -- it takes
+            # `max_iter` rather than `n_estimators`, has no `subsample`, and
+            # defaults to `min_samples_leaf=20` rather than 1.
+            return HistGradientBoostingRegressor
         elif model_type == "elastic_net":
             return ElasticNet
         elif model_type == "lasso":

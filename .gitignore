@@ -197,3 +197,6 @@ dist_build_test/
 
 # registry snapshots and pruned copies (the registry itself is *.db, above)
 .registry/
+
+# local experiment scratch: probe configs and their throwaway registries
+.experiments/
