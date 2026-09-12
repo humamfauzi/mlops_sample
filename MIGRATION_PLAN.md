@@ -16,21 +16,30 @@
 | 3 — Verify the artifact | ✅ done | `19cc6f4` |
 | 4 — Unify configuration | ✅ done | `da2bb54` |
 | 5 — Retire the legacy stack | ✅ done | `a8b047b` |
-| 6 — Close the deployment loop | ⬜ not started — target decided: installed binary, no containers | |
-| 7 — Harden the registry | 🟡 partial — F-06, F-07, F-08 done; F-05 and the rest open | *(this phase)* |
+| 6 — Close the deployment loop | ✅ done | `deploy/` + README rewrite |
+| 7 — Harden the registry | ✅ done except F-09 (deferred for discussion) | *(this phase)* |
 
 ### Phase 7 progress
 
 | ID | Status | Notes |
 |---|---|---|
+| **F-05** | ✅ fixed | `ModelWrapper.test` now returns a metric mapping and `check_model_against_test` selects `primary_metric` explicitly. Previously it returned the loop variable, so nomination compared RMSE against a stored MAE whenever the primary metric was not last — **this was a live bug affecting 9 configs**, unlike F-06/F-07/F-08 which were latent. |
 | **F-06** | ✅ fixed | `ORDER BY m.value ASC, r.id ASC LIMIT 1` in `select_previously_published`. Latent: every published run currently has exactly one test-scored child. |
 | **F-07** | ✅ fixed | Model lookup scoped to the parent run; run-ID generation retries on collision; also corrected the alphabet literal (`12345678890` had a duplicated `8` and no `0`). Latent: 91 runs, 91 distinct names. |
 | **F-08** | ✅ fixed | `IS_EXPORT` / `IS_TEMPERATURE_CONTROLLED` classified as categorical, and `_save_manifest` now raises on any column it cannot account for. Also required adding the missing `primary_id()` to `SampleEnumTransformer`. |
-| **F-05** | ⬜ open | Nomination compares mismatched metrics when `primary_metric` is not last in `metrics`. Affects 9 configs — **the highest-impact item still outstanding**. |
-| F-09 | ⬜ open | Version `example.db` under DVC |
-| F-14 | ⬜ open | Unimplemented config options fail silently rather than raising |
-| F-15/F-16 | ⬜ open | Post-test loader performance; discarded validation prediction |
-| F-18 | ⬜ open | Empty `experiments` table, unused `audit_logs`, unused blob hashes |
+| **F-09** | ⏸ deferred | Version `example.db` under DVC — needs a discussion about registry size and retention first. |
+| **F-14** | ✅ fixed | `parameter_grid: "random"`, `objective: "fast_model"`, unknown model types, non-CSV `data_io` formats, unknown `data_io` steps and OHE conditions other than `append_and_remove` now raise. All 10 shipped configs already use supported values. |
+| **F-15** | ✅ fixed | `load_random_rows_via_csv` no longer scans the file to count lines or passes a per-row Python predicate to `skiprows`; it uses a set-based skiprows and records its own loading time. |
+| **F-16** | ✅ fixed | `validate()` predicted once per metric *and* per stage — up to six full predictions for a three-metric request — and discarded an initial prediction outright. It now predicts once per split, and validation timing covers the whole stage. |
+| **F-18** | ✅ fixed | Experiments are registered on first use, so runs can no longer reference an id with no row; the unused `audit_logs` table is dropped; the unused blob `hash` is gone and blobs now carry a UNIQUE `(run_id, intent)` index with `INSERT OR REPLACE`, so re-saving a run's artifacts is idempotent. Also removed the dead, broken `find_best_model_run`. |
+
+**Phase 6** added `deploy/mlops-server.service` (systemd, verified with
+`systemd-analyze`), `deploy/install.sh` (refuses to install a binary that fails
+its own smoke test), `deploy/env.example`, `deploy/README.md` (runbook,
+rollback, troubleshooting) and replaced the README's Docker/MLflow-era content
+with the actual SQLite + binary architecture.
+
+*Outstanding:* `pgdata/` needs `sudo rm -rf pgdata` — owned by `nobody`, mode `700`.
 
 **Phase 4** introduced `runtime_config.py` + `config/runtime.json`. Both the
 trainer (`ScenarioManager._resolve_repository`) and the server
