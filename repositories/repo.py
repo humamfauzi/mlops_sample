@@ -77,6 +77,9 @@ class Facade:
         return self.repository.list_all_experiments()
 
     def new_run(self, name: str):
+        # Register the experiment before anything references it, so a run can
+        # never point at an experiment id that does not exist.
+        self.repository.ensure_experiment(self.experiment_id)
         new_run_id = self.repository.new_run(name, self.experiment_id)
         self.current_run_id = new_run_id
         return self

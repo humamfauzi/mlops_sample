@@ -40,6 +40,9 @@ class Repository:
     def get_all_published_candidates(self, experiment_id: str):
         return []
 
+    def ensure_experiment(self, experiment_id: str):
+        return experiment_id
+
     def get_intent(self, run_id: int = None):
         return None
 

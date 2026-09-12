@@ -1,27 +1,48 @@
-"""Tests for the SQLite registry's nomination and model-lookup behaviour.
+"""Tests for the SQLite registry: nomination, lookup, experiments and blobs.
 
-These cover F-06 and F-07 from REPOSITORY_MAP.md:
+Covers F-06, F-07 and F-18 from REPOSITORY_MAP.md:
 
   F-06  the champion/challenger comparison relied on unspecified row order
   F-07  model lookup by the six-character run name was not scoped to a run, so
         a name collision would silently resolve to another run's model
+  F-18  runs referenced an experiment id with no row, blobs had no uniqueness,
+        and an unused audit_logs table was created on every migration
 
-Both were latent rather than active -- no collision has occurred and every
-published run currently has exactly one test-scored child -- so the tests below
-construct the conditions explicitly.
+F-06 and F-07 were latent rather than active -- no collision has occurred and
+every published run currently has exactly one test-scored child -- so the tests
+below construct the conditions explicitly.
 """
+import sqlite3
+
 import pytest
 
 from repositories.repo import Facade
-from repositories.sqlite import SQLiteRepository
+from repositories.sqlite import ObjectStorage, SQLiteRepository
+from repositories.struct import ModelObject
 
 EXPERIMENT = "experiment_test"
 INTENT = "some_intent"
 
 
 @pytest.fixture
-def repo(tmp_path):
-    return SQLiteRepository(name=str(tmp_path / "registry.db"), migrate=True)
+def db_path(tmp_path):
+    return str(tmp_path / "registry.db")
+
+
+@pytest.fixture
+def repo(db_path):
+    return SQLiteRepository(name=db_path, migrate=True)
+
+
+@pytest.fixture
+def store(db_path, repo):
+    """The artifact half of the same database."""
+    return ObjectStorage(name=db_path, migrate=True)
+
+
+def rows(db_path, query, args=()):
+    with sqlite3.connect(db_path) as conn:
+        return conn.execute(query, args).fetchall()
 
 
 def make_published_run(repo, name, intent=INTENT, experiment=EXPERIMENT):
@@ -196,3 +217,84 @@ class TestRunNameUniqueness:
         assert all(len(g) == 6 for g in generated)
         # the malformed alphabet had a duplicated '8' and no '0'
         assert all(c in "ABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890" for g in generated for c in g)
+
+
+class TestExperimentRegistration:
+    """F-18: runs referenced an experiment_id that never existed as a row.
+
+    The experiments table stayed empty while 91 runs pointed at
+    'experiment_001', so a typo in EXPERIMENT_ID would silently start a
+    parallel universe of runs with nothing to catch it.
+    """
+
+    def test_ensure_experiment_registers_the_id(self, repo, db_path):
+        repo.ensure_experiment("exp_a")
+
+        assert rows(db_path, "SELECT id FROM experiments") == [("exp_a",)]
+
+    def test_ensure_experiment_is_idempotent(self, repo, db_path):
+        repo.ensure_experiment("exp_a")
+        repo.ensure_experiment("exp_a")
+        repo.ensure_experiment("exp_a")
+
+        assert rows(db_path, "SELECT id FROM experiments") == [("exp_a",)]
+
+    def test_creating_a_run_registers_its_experiment(self, repo, db_path):
+        # Going through the facade is what the training pipeline does.
+        Facade("exp_via_facade", repo, repo).new_run("RUN001")
+
+        assert ("exp_via_facade",) in rows(db_path, "SELECT id FROM experiments")
+
+    def test_every_run_experiment_has_a_row(self, db_path):
+        facade = Facade("exp_a", SQLiteRepository(name=db_path, migrate=True), None)
+        facade.new_run("RUN001")
+        facade.new_run("RUN002")
+
+        known = {r[0] for r in rows(db_path, "SELECT id FROM experiments")}
+        referenced = {r[0] for r in rows(db_path, "SELECT DISTINCT experiment_id FROM runs")}
+
+        assert referenced <= known
+
+    def test_audit_logs_table_is_gone(self, repo, db_path):
+        # It was created on every migrate and never written to.
+        tables = {r[0] for r in rows(db_path, "SELECT name FROM sqlite_master WHERE type='table'")}
+
+        assert "audit_logs" not in tables
+
+
+class TestBlobStorage:
+    """F-18: blobs were keyed by (run_id, intent) with no uniqueness."""
+
+    def test_saving_the_same_artifact_twice_stores_one_row(self, store, db_path):
+        store.save_model(1, ModelObject(filename="MODEL1", object={"v": 1}))
+        store.save_model(1, ModelObject(filename="MODEL1", object={"v": 2}))
+
+        assert rows(db_path, "SELECT COUNT(*) FROM blobs") == [(1,)]
+
+    def test_the_latest_value_wins(self, store):
+        store.save_model(1, ModelObject(filename="MODEL1", object={"v": 1}))
+        store.save_model(1, ModelObject(filename="MODEL1", object={"v": 2}))
+
+        assert store.load_model(1, "MODEL1").object == {"v": 2}
+
+    def test_distinct_artifacts_coexist(self, store, db_path):
+        store.save_model(1, ModelObject(filename="MODEL1", object={"v": 1}))
+        store.save_model(1, ModelObject(filename="MODEL2", object={"v": 2}))
+        store.save_model(2, ModelObject(filename="MODEL1", object={"v": 3}))
+
+        assert rows(db_path, "SELECT COUNT(*) FROM blobs") == [(3,)]
+
+    def test_unique_index_exists(self, store, db_path):
+        indexes = {r[0] for r in rows(db_path, "SELECT name FROM sqlite_master WHERE type='index'")}
+
+        assert "idx_blobs_runid_intent" in indexes
+
+    def test_transformation_objects_report_what_they_wrote(self, store):
+        from repositories.struct import TransformationObject
+
+        written = store.save_transformation_object(1, [
+            TransformationObject(filename="ohe-00-a.pkl", object={"a": 1}),
+            TransformationObject(filename="log-01-b.pkl", object={"b": 2}),
+        ])
+
+        assert written == ["ohe-00-a.pkl", "log-01-b.pkl"]

@@ -3,7 +3,6 @@ import uuid
 import json
 import io
 import pickle
-import hashlib
 from typing import List
 
 from repositories.struct import ModelObject, TransformationObject
@@ -24,6 +23,23 @@ class SQLiteRepository:
             c.execute('INSERT INTO experiments (id, name) VALUES (?, ?)', (id, name))
             conn.commit()
             return id
+
+    def ensure_experiment(self, experiment_id: str):
+        """Register `experiment_id` if it is not already known.
+
+        Runs reference an experiment_id from configuration, but nothing ever
+        created the corresponding row, so the experiments table stayed empty
+        while 91 runs pointed at 'experiment_001'. A typo in EXPERIMENT_ID
+        would silently start a parallel universe of runs.
+        """
+        with sqlite3.connect(self.name) as conn:
+            c = conn.cursor()
+            c.execute(
+                'INSERT OR IGNORE INTO experiments (id, name) VALUES (?, ?)',
+                (experiment_id, experiment_id),
+            )
+            conn.commit()
+        return experiment_id
 
     def new_run(self, name: str, experiment_id: str):
         with sqlite3.connect(self.name) as conn:
@@ -66,24 +82,6 @@ class SQLiteRepository:
             c.execute('INSERT INTO properties (run_id, key, value) VALUES (?, ?, ?)', (run_id, key, value))
             conn.commit()
             return c.lastrowid
-
-    def find_best_model_run(self, experiment_id: str, metric: str):
-        with sqlite3.connect(self.name) as conn:
-            c = conn.cursor()
-            query = '''
-                SELECT r.name
-                FROM runs r
-                JOIN metrics m ON r.id = m.run_id
-                JOIN tags t ON r.id = t.run_id
-                WHERE r.experiment_id = ? AND m.key = ? AND tags.key = 'status' AND tags.value = 'champion'
-                ORDER BY m.value ASC
-                LIMIT 1
-            '''
-            c.execute(query, (experiment_id, metric))
-            result = c.fetchone()
-            if result:
-                return result[0]  # return run id
-            return None
 
     def find_best_model_within_run(self, parent_run_id: int, metric: str):
         with sqlite3.connect(self.name) as conn:
@@ -324,21 +322,13 @@ class SQLiteRepository:
                 FOREIGN KEY(run_id) REFERENCES runs(id)
             )''')
 
-            c.execute('''CREATE TABLE IF NOT EXISTS audit_logs (
-                id INTEGER PRIMARY KEY,
-                table_name VARCHAR(255),
-                reference_id VARCHAR(255),
-                type VARCHAR(10),
-                previous TEXT,
-                current TEXT,
-                created_at TIMESTAMP
-            )''')
-
             c.execute('''CREATE INDEX IF NOT EXISTS idx_objects_runid_type ON objects(run_id, type)''')
-            c.execute('''CREATE INDEX IF NOT EXISTS idx_auditlogs_tablename_refid ON audit_logs(table_name, reference_id)''')
             c.execute('''CREATE INDEX IF NOT EXISTS idx_properties_runid_key ON properties(run_id, key)''')
             c.execute('''CREATE INDEX IF NOT EXISTS idx_metrics_runid_key ON metrics(run_id, key)''')
             c.execute('''CREATE INDEX IF NOT EXISTS idx_tags_runid_key ON tags(run_id, key)''')
+
+            # audit_logs was created here and never written to by anything.
+            c.execute('''DROP TABLE IF EXISTS audit_logs''')
 
             conn.commit()
 
@@ -358,31 +348,37 @@ class ObjectStorage:
     def migrate(self):
         with sqlite3.connect(self.name) as conn:
             c = conn.cursor()
+            # `hash` is retained in the schema for backward compatibility with
+            # databases written before it was dropped: it was computed and
+            # stored but never read, and content-addressed dedup would have
+            # saved nothing (the duplicated blobs are ~118-byte transform
+            # pickles, while the 900 MB of models are unique per run).
             c.execute('''CREATE TABLE IF NOT EXISTS blobs (
                       id INTEGER PRIMARY KEY,
                       run_id INTEGER,
                       intent VARCHAR(100),
                       type VARCHAR(100),
-                      hash VARCHAR(64),
                       data BLOB
             )''')
 
             c.execute('''CREATE INDEX IF NOT EXISTS idx_blobs_runid_type ON blobs(run_id, type)''')
+            # Blobs are keyed by (run_id, intent). Without this, re-saving a
+            # run's artifacts silently appended duplicate rows.
+            c.execute('''CREATE UNIQUE INDEX IF NOT EXISTS idx_blobs_runid_intent
+                         ON blobs(run_id, intent)''')
             conn.commit()
 
-    def blob_hash(self, data: bytes) -> str:
-        sha256 = hashlib.sha256()
-        sha256.update(data)
-        return sha256.hexdigest()
+    def insert_blob(self, run_id: str, intent: str, type: str, data: bytes) -> None:
+        """Store a blob under (run_id, intent), replacing any previous value.
 
-    def insert_blob(self, run_id: str, intent: str, type: str, data: bytes) -> str:
-        hash_value = self.blob_hash(data)
+        Re-saving the same artifact for a run is now idempotent rather than
+        appending a second row that `load_*` would pick between arbitrarily.
+        """
         with sqlite3.connect(self.name) as conn:
             c = conn.cursor()
-            c.execute('INSERT INTO blobs (run_id, intent, type, hash, data) VALUES (?, ?, ?, ?, ?)',
-                      (run_id, intent, type, hash_value, data))
+            c.execute('INSERT OR REPLACE INTO blobs (run_id, intent, type, data) VALUES (?, ?, ?, ?)',
+                      (run_id, intent, type, data))
             conn.commit()
-        return hash_value
 
     def save_transformation_instruction(self, run_id: str, instructions: List[TransformationInstruction]):
         all_instruction = [inst.to_dict() for inst in instructions]
@@ -391,16 +387,20 @@ class ObjectStorage:
         return self.insert_blob(run_id, "transformation_instruction", "json", data)
 
     def save_transformation_object(self, run_id: str, transformation_objects: List[TransformationObject]):
-        blob_hashes = []
+        """Persist fitted transformation objects; returns the filenames written.
+
+        Matches the disk backend, which already returned filenames.
+        """
+        filenames = []
         for obj in transformation_objects:
             buffer = io.BytesIO()
             pickle.dump(obj.object, buffer, protocol=pickle.HIGHEST_PROTOCOL)
             buffer.seek(0)
             data = buffer.getvalue()
             intent = f"transformation_object/{obj.filename}"
-            hash_value = self.insert_blob(run_id, intent, "pkl", data)
-            blob_hashes.append((obj.filename, hash_value))
-        return blob_hashes
+            self.insert_blob(run_id, intent, "pkl", data)
+            filenames.append(obj.filename)
+        return filenames
 
     def load_transformation_instruction(self, run_id: str) -> List[TransformationInstruction]:
         with sqlite3.connect(self.name) as conn:
