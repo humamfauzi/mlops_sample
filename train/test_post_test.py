@@ -12,6 +12,7 @@ $7,667 on 686 rows, against $9,098 on the 69,944 rows the config asked for.
 import json
 import pathlib
 
+import numpy as np
 import pandas as pd
 import pytest
 
@@ -20,6 +21,8 @@ from train.post_test import (
     DEFAULT_SEED,
     Config,
     PostTest,
+    calibration_by_decile,
+    value_weighted_log_mae,
 )
 
 
@@ -167,3 +170,94 @@ class TestCallValidation:
     def test_empty_call_is_rejected(self):
         with pytest.raises(ValueError, match="at least one entry"):
             make_post_test([])
+
+
+class TestValueWeightedLogMae:
+    """The dollar-aligned, stable alternative to raw dollar MAE.
+
+    Dollar error is approximately value x relative error, so weighting the
+    relative error by value tracks dollars -- but the raw weight is dominated by
+    a handful of enormous shipments, which is why it is capped.
+    """
+
+    def test_separates_cases_that_log_mae_cannot(self):
+        # Two shipments. Both models are 2x off on exactly one of them, so their
+        # log MAE is identical -- but model B is off on the $100,000 one.
+        y = np.array([10.0, 100_000.0])
+        a = np.array([20.0, 100_000.0])
+        b = np.array([10.0, 200_000.0])
+
+        assert np.isclose(np.abs(np.log(a / y)).mean(), np.abs(np.log(b / y)).mean())
+        assert np.abs(a - y).mean() < np.abs(b - y).mean()
+        assert value_weighted_log_mae(y, a) < value_weighted_log_mae(y, b)
+
+    def test_is_zero_for_a_perfect_prediction(self):
+        y = np.array([1.0, 100.0, 10_000.0])
+
+        assert value_weighted_log_mae(y, y) == pytest.approx(0.0)
+
+    def test_weighting_favours_accuracy_on_large_values(self):
+        y = np.array([10.0, 100_000.0])
+        # same log error magnitude, applied to the small vs the large shipment
+        off_small = np.array([20.0, 100_000.0])
+        off_large = np.array([10.0, 200_000.0])
+
+        assert value_weighted_log_mae(y, off_small) < value_weighted_log_mae(y, off_large)
+
+    def test_cap_limits_how_much_one_row_can_matter(self):
+        # 20,000 ordinary shipments worth $100 each ($2m of total weight) plus
+        # one $500m shipment. Without a cap that single row is 99.6% of the
+        # weight; with a $1m cap it is a third.
+        n = 20_000
+        y = np.concatenate([np.full(n, 100.0), [500_000_000.0]])
+        p = np.concatenate([np.full(n, 100.0), [100_000_000.0]])  # big row 5x off
+
+        uncapped = value_weighted_log_mae(y, p, cap=float("inf"))
+        capped = value_weighted_log_mae(y, p, cap=1_000_000.0)
+
+        # uncapped it is essentially the big row's own error, log(5)
+        assert uncapped == pytest.approx(np.log(5.0), rel=0.01)
+        # capped, that row carries about a third of the weight
+        assert capped == pytest.approx(np.log(5.0) * 1e6 / (1e6 + 100 * n), rel=0.01)
+        assert capped < uncapped / 2
+
+    def test_cap_above_every_value_changes_nothing(self):
+        y = np.array([1.0, 10.0, 100.0])
+        p = np.array([1.1, 9.0, 130.0])
+
+        assert value_weighted_log_mae(y, p, cap=1e12) == pytest.approx(
+            value_weighted_log_mae(y, p, cap=float("inf")))
+
+
+class TestCalibrationByDecile:
+    def test_reports_one_row_per_decile(self):
+        rng = np.random.default_rng(0)
+        y = np.exp(rng.normal(6, 2, 5000))
+        p = y * np.exp(rng.normal(0, 0.3, 5000))
+
+        rows = calibration_by_decile(y, p, bins=10)
+
+        assert len(rows) == 10
+        assert sum(r["rows"] for r in rows) == 5000
+
+    def test_detects_systematic_shrinkage(self):
+        # A model that hedges toward the middle: high values under-predicted,
+        # low values over-predicted. This is the signature the scalar metric
+        # hides and the table must show.
+        rng = np.random.default_rng(1)
+        y = np.exp(rng.normal(6, 2, 20000))
+        p = np.exp(0.7 * np.log(y) + 0.3 * 6.0)      # shrunk toward the mean
+        rows = calibration_by_decile(y, p, bins=10)
+
+        assert rows[0]["ratio"] > 1.0        # smallest decile over-predicted
+        assert rows[-1]["ratio"] < 1.0       # largest decile under-predicted
+
+    def test_a_calibrated_model_has_ratios_near_one(self):
+        rng = np.random.default_rng(2)
+        y = np.exp(rng.normal(6, 2, 20000))
+        p = y * np.exp(rng.normal(0, 0.2, 20000))
+
+        rows = calibration_by_decile(y, p, bins=5)
+
+        for r in rows:
+            assert 0.8 < r["ratio"] < 1.25

@@ -15,6 +15,64 @@ from column.cfs2017 import TabularColumn
 DEFAULT_N_SAMPLES = 1000
 DEFAULT_SEED = 42
 
+# Dollar error is dominated by a handful of enormous shipments, so it does not
+# converge: the same model varies ~34% across 100k draws of CFS 2017, and a
+# larger draw is worse rather than better. Weighting the *relative* error by
+# value keeps the dollar alignment -- dollar error is approximately
+# value x relative error -- while capping how much the extreme tail can swing
+# the result. That brings the spread to ~6%.
+#
+# $1,000,000 is roughly the 99.9th percentile of SHIPMT_VALUE: 0.086% of rows
+# exceed it, and they hold 46% of all value.
+VWLE_CAP = 1_000_000.0
+
+_FLOOR = 1e-9
+
+
+def value_weighted_log_mae(y_true, y_pred, cap: float = VWLE_CAP) -> float:
+    """Value-weighted absolute log error, with the weight capped.
+
+        sum( min(y, cap) * |log(y_pred / y)| ) / sum( min(y, cap) )
+
+    A stable, dollar-aligned alternative to raw dollar MAE. Values at or below
+    the cap keep their natural weight; everything above is flattened to the cap
+    so a single nine-figure shipment cannot own the metric.
+    """
+    y = np.clip(np.asarray(y_true, dtype=float).reshape(-1), _FLOOR, None)
+    p = np.clip(np.asarray(y_pred, dtype=float).reshape(-1), _FLOOR, None)
+    weight = np.minimum(y, cap)
+    return float((weight * np.abs(np.log(p / y))).sum() / weight.sum())
+
+
+def calibration_by_decile(y_true, y_pred, bins: int = 10):
+    """Mean actual vs mean predicted per value decile.
+
+    A scalar metric can improve while the model keeps shrinking extremes toward
+    the middle. This table is what shows whether it actually stopped.
+    """
+    y = np.asarray(y_true, dtype=float).reshape(-1)
+    p = np.asarray(y_pred, dtype=float).reshape(-1)
+    edges = np.quantile(y, np.linspace(0, 1, bins + 1))
+    edges = np.unique(edges)
+    rows = []
+    for i in range(len(edges) - 1):
+        lo, hi = edges[i], edges[i + 1]
+        m = (y >= lo) & (y <= hi if i == len(edges) - 2 else y < hi)
+        if m.sum() == 0:
+            continue
+        rows.append({
+            "decile": i,
+            "value_min": float(y[m].min()),
+            "value_max": float(y[m].max()),
+            "rows": int(m.sum()),
+            "log_mae": float(np.abs(np.log(np.clip(p[m], _FLOOR, None) /
+                                            np.clip(y[m], _FLOOR, None))).mean()),
+            "mean_actual": float(y[m].mean()),
+            "mean_predicted": float(p[m].mean()),
+            "ratio": float(p[m].mean() / y[m].mean()) if y[m].mean() else float("nan"),
+        })
+    return rows
+
 # `check_against` selects what a prediction is compared against. Only comparing
 # against the row's own actual target is implemented; "random" was the value
 # the existing configs used to describe their *sampling*, so it is accepted as
@@ -164,8 +222,13 @@ class PostTest:
         )
         return self.cleaner.execute(self.loader.execute(None))
 
-    def check(self, inference: Inference, samples: pd.DataFrame, metrics: List[str]) -> dict:
-        actual_outcome = samples[self.column.target()].copy()
+    def predict(self, inference: Inference, samples: pd.DataFrame) -> np.ndarray:
+        """Replay the stored transformation pipeline and predict, in dollars.
+
+        Split out of `check` so callers can get the raw predictions for
+        diagnostics (calibration by decile, error decomposition) rather than
+        only a scalar.
+        """
         transformed = samples[[ai.name for ai in inference.transformations.available_input]].copy()
         for transformation in inference.transformations.transformation:
             column = transformation["column"]
@@ -188,18 +251,24 @@ class PostTest:
                 transformed = pd.concat([transformed.drop(column, axis=1), new_columns], axis=1)
         result = inference.model.predict(transformed)
         for it in inference.transformations.itransformation:
-            func = it["function"]
-            column = it["column"]
-            result = func(result)
+            # the target's inverse transform, e.g. exp, maps back to dollars
+            result = it["function"](np.asarray(result).reshape(-1, 1))
+        return np.asarray(result).reshape(-1)
+
+    def check(self, inference: Inference, samples: pd.DataFrame, metrics: List[str]) -> dict:
+        actual_outcome = samples[self.column.target()].to_numpy(dtype=float)
+        predicted = self.predict(inference, samples)
         return {
-            metric: self.metric_map()[metric](actual_outcome, result) for metric in metrics
+            metric: self.metric_map()[metric](actual_outcome, predicted)
+            for metric in metrics
         }
 
     def metric_map(self):
         return {
             "mse": mean_squared_error,
             "rmse": lambda y_true, y_pred: np.sqrt(mean_squared_error(y_true, y_pred)),
-            "mae": lambda y_true, y_pred: np.mean(np.abs(y_true - y_pred))
+            "mae": lambda y_true, y_pred: np.mean(np.abs(y_true - y_pred)),
+            "value_weighted_log_mae": value_weighted_log_mae,
         }
 
     def store_metrics(self, result: dict):

@@ -296,6 +296,10 @@ measured against the config that actually wins, not against the segment model.
 
 ### Phase D — Evaluation discipline (re-scoped)
 
+> The skew-specific experiment proposal lives in [`SKEW_EXPERIMENTS.md`](SKEW_EXPERIMENTS.md). It supersedes the D5
+> decision below and adds a metric (`value_weighted_log_mae`) plus five
+> experiments targeting the tail directly.
+
 **The original D3 — "promote on `post_test.mae`" — is withdrawn.** It was wrong,
 and the measurements below are why. Phase D is now about deciding what can be
 trusted, not about changing the promotion metric.

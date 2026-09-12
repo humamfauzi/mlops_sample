@@ -29,13 +29,19 @@ import warnings
 
 warnings.filterwarnings("ignore")
 
+import numpy as np
+
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 import runtime_config  # noqa: E402
 from repositories.repo import Facade  # noqa: E402
 from train.data_cleaner import Cleaner  # noqa: E402
-from train.post_test import PostTest  # noqa: E402
+from train.post_test import (  # noqa: E402
+    PostTest,
+    calibration_by_decile,
+    value_weighted_log_mae,
+)
 
 
 def load_config(path: str) -> dict:
@@ -75,6 +81,17 @@ def main(argv=None) -> int:
         metavar="S",
         help="draw several samples and report the spread (recommended; see below)",
     )
+    ap.add_argument(
+        "--calibration",
+        action="store_true",
+        help="also print mean actual vs mean predicted per value decile",
+    )
+    ap.add_argument(
+        "--cap",
+        type=float,
+        default=1_000_000.0,
+        help="weight cap for the value-weighted log error (default 1e6)",
+    )
     args = ap.parse_args(argv)
 
     seeds = args.seeds if args.seeds else [args.seed]
@@ -82,13 +99,16 @@ def main(argv=None) -> int:
     inference = post_test.reconstruct_inference(args.run_id)
 
     started = time.time()
-    scores = []
-    rows = []
+    dollar, vwle, rows = [], [], []
+    last = None
     for seed in seeds:
         samples = post_test.pick_random_samples(args.n_rows, seed)
-        result = post_test.check(inference, samples, ["mae"])
-        scores.append(list(result.values())[0])
+        actual = samples[post_test.column.target()].to_numpy(dtype=float)
+        predicted = post_test.predict(inference, samples)
+        dollar.append(float(np.abs(predicted - actual).mean()))
+        vwle.append(value_weighted_log_mae(actual, predicted, cap=args.cap))
         rows.append(len(samples))
+        last = (actual, predicted)
     elapsed = time.time() - started
 
     print(f"run {args.run_id}  ({args.config})")
@@ -97,26 +117,33 @@ def main(argv=None) -> int:
     print("" if min(rows) == max(rows) else f" .. {max(rows):,}")
     print()
 
-    if len(scores) == 1:
-        print(f"  post_test MAE           ${scores[0]:>13,.2f}")
+    def spread(values):
+        return 100 * (max(values) - min(values)) / np.median(values)
+
+    print(f"  {'metric':<26}{'median':>14}{'spread':>10}   note")
+    print(f"  {'dollar MAE':<26}{'$' + format(np.median(dollar), ',.2f'):>14}"
+          f"{spread(dollar):>9.0f}%   headline only")
+    print(f"  {'value-weighted log MAE':<26}{np.median(vwle):>14,.4f}"
+          f"{spread(vwle):>9.0f}%   dollar-aligned, weight capped at ${args.cap:,.0f}")
+
+    if len(dollar) == 1:
         print()
-        print("  A single draw is not a measurement. The same model on different")
-        print("  100k samples of CFS 2017 varies by roughly 40%, because ten")
-        print("  shipments out of 100,000 can decide a quarter of this metric.")
-        print("  Re-run with --seeds 42 7 101 2024 31337 for a usable range.")
-    else:
-        ordered = sorted(scores)
-        median = ordered[len(ordered) // 2]
-        print(f"  post_test MAE           ${median:>13,.2f}   (median of {len(scores)})")
-        print(f"    min ${min(scores):>13,.2f}")
-        print(f"    max ${max(scores):>13,.2f}")
-        print(f"    spread            ${max(scores) - min(scores):>13,.2f}"
-              f"   ({100 * (max(scores) - min(scores)) / median:.0f}% of the median)")
-        if max(scores) - min(scores) > 0.2 * median:
-            print()
-            print("  This spread is wider than any improvement worth chasing.")
-            print("  Compare candidates on the median of several draws, or on")
-            print("  log-space test MAE, which is stable to about 0.005.")
+        print("  A single draw is not a measurement. Dollar MAE varies by roughly")
+        print("  40% across 100k samples of CFS 2017, because ten shipments out of")
+        print("  100,000 can decide a quarter of it. Re-run with")
+        print("  --seeds 42 7 101 2024 31337 for the range, and prefer the")
+        print("  value-weighted log MAE, which is roughly five times tighter.")
+
+    if args.calibration and last is not None:
+        actual, predicted = last
+        print(f"\n  calibration by value decile (seed {seeds[-1]}):")
+        print(f"    {'decile':<8}{'value range':>30}{'rows':>8}{'log MAE':>9}"
+              f"{'mean actual':>15}{'mean pred':>15}{'ratio':>8}")
+        for r in calibration_by_decile(actual, predicted, bins=10):
+            rng = f"${r['value_min']:,.0f}-${r['value_max']:,.0f}"
+            print(f"    {r['decile']:<8}{rng:>30}{r['rows']:>8,}{r['log_mae']:>9.3f}"
+                  f"{r['mean_actual']:>15,.0f}{r['mean_predicted']:>15,.0f}{r['ratio']:>8.2f}")
+        print("    ratio < 1 means the model under-predicts that decile")
 
     print(f"\n  elapsed                 {elapsed:>9.1f}s")
     return 0
