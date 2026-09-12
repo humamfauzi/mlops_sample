@@ -90,7 +90,27 @@ lifespan(app)
 
 @app.get("/health")
 async def health():
-    return response.HealthResponse(status="ok").to_json_response()
+    if model is None:
+        return response.HealthResponse(
+            status="unavailable",
+            http_status=503,
+        ).to_json_response()
+    h = model.health()
+    if h["loaded"] == 0:
+        return response.HealthResponse(
+            status="unavailable",
+            model_count=0,
+            failed=h["failed"],
+            failures=h["failures"],
+            http_status=503,
+        ).to_json_response()
+    return response.HealthResponse(
+        status="ok" if h["failed"] == 0 else "degraded",
+        model_count=h["loaded"],
+        failed=h["failed"],
+        failures=h["failures"],
+        http_status=200,
+    ).to_json_response()
 
 # Primary endpoint for getting all available model for CFS 2017 problems
 @app.get("/cfs2017")

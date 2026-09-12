@@ -3,6 +3,7 @@ from repositories.repo import Facade
 from column.cfs2017 import TabularColumn # TODO: should move this out of cfs2017 file
 from typing import Dict
 from server.enum_maps import primary
+from server.error import UserError
 import traceback
 
 class InferenceManager:
@@ -18,6 +19,9 @@ class InferenceManager:
         self.inferences: Dict[str, Inference] = {}
         self.experiment_id = experiment_id
         self.column_reference = column_reference
+        # Models that were published but failed to load, keyed by run name.
+        # Surfaced through health() instead of being silently dropped.
+        self.failures: Dict[str, str] = {}
 
     @classmethod
     def parse_instruction(cls, repository: Facade, config: dict):
@@ -30,14 +34,34 @@ class InferenceManager:
             try:
                 c.inferences[name] = Inference.parse_instruction(repository, id, name, column_reference)
             except Exception as e:
+                c.failures[name] = f"{type(e).__name__}: {e}"
                 print(f"Error parsing instruction for model {name}: {e}")
                 traceback.print_exc()
+
+        # A server that loaded nothing is not usable. Raise rather than come up
+        # healthy and 404/500 on every request.
+        if pm and not c.inferences:
+            detail = "; ".join(f"{k} -> {v}" for k, v in c.failures.items())
+            raise RuntimeError(
+                f"No models could be loaded for experiment '{experiment_id}' "
+                f"({len(pm)} published candidate(s), all failed): {detail}"
+            )
         return c
+
+    def health(self) -> dict:
+        return {
+            "loaded": len(self.inferences),
+            "failed": len(self.failures),
+            "models": sorted(self.inferences.keys()),
+            "failures": self.failures,
+        }
 
     def infer(self, model_name: str, input_data: dict):
         infer = self.inferences.get(model_name, None)
         if infer is None:
-            raise ValueError(f"Model {model_name} not found")
+            raise UserError(f"Model '{model_name}' not found") \
+                .set_kvs({"model": model_name, "available_models": sorted(self.inferences.keys())}) \
+                .set_http_status(404)
         return {
             self.column_reference.target().lower(): infer.infer(input_data)
         }
@@ -54,7 +78,9 @@ class InferenceManager:
     def metadata(self, model_name: str):
         infer = self.inferences.get(model_name, None)
         if infer is None:
-            raise ValueError(f"Model {model_name} not found")
+            raise UserError(f"Model '{model_name}' not found") \
+                .set_kvs({"model": model_name, "available_models": sorted(self.inferences.keys())}) \
+                .set_http_status(404)
         return infer.metadata()
 
 from server.transformation import Transformation

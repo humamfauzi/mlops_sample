@@ -3,7 +3,7 @@ ifneq (,$(wildcard ./.env))
     export
 endif
 
-.PHONY: register-dvc-remote build teardown rebuild train-terminal server-terminal create-server-container test train setup-ec2 manual-hit tags test-env
+.PHONY: register-dvc-remote build teardown rebuild train-terminal server-terminal create-server-container test train setup-ec2 manual-hit list-models health tags test-env serve build-train-module build-server-module train-all smoke-test
 
 register-dvc-remote:
 	dvc remote modify --local origin access_key_id ${AWS_ACCESS_KEY}
@@ -58,11 +58,11 @@ create-server-container:
 
 # run test units
 test:
-	pytest -x --disable-warnings --ignore=pgdata -vv 
+	pytest --disable-warnings --ignore=pgdata -vv 
 
 # run designated train
 train:
-	python -m train.train
+	python -m train.main $(config)
 
 # setup essential tools for EC2
 setup-ec2:
@@ -75,8 +75,22 @@ setup-ec2:
 	sudo chmod +x /usr/local/bin/docker-compose
 	docker-compose --version
 
+# list the models this server currently exposes, with their accepted inputs
+list-models:
+	curl -s "http://localhost:$(PORT)/cfs2017"
+	@echo
+
+# smoke-check the served champion model end to end.
+# run `make list-models` to see available model ids; keys/values must match
+# the input manifest returned there.
 manual-hit:
-	curl "http://localhost:5001/cfs2017?naics=1&origin_state=1&destination_state=2&mode=1&shipment_weight=200&shipment_distance_route=12"
+	curl -s "http://localhost:$(PORT)/cfs2017/68IHBV/inference?NAICS=326&SHIPMENT_WEIGHT=20000&MODE=4&SCTG=35&SHIPMENT_DISTANCE_ROUTE=500"
+	@echo
+
+# verify the server is up and reports how many models it loaded
+health:
+	curl -s "http://localhost:$(PORT)/health"
+	@echo
 
 # generate tags for python for better symbol searching
 tags:

@@ -22,7 +22,10 @@ def list_all_possible_instructions():
             jf = json.load(f) 
             instructions.append({"name": jf["name"], "content": jf["description"]})
 
-    print("Available instructions:", pprint(instructions))
+    print("Available instructions:")
+    for inst in sorted(instructions, key=lambda i: i["name"]):
+        print(f"  {inst['name']}")
+        print(f"      {inst['content']}")
 
 def call_instruction(instruction_name: str):
     instruction = json.load(open(instruction_name, 'r'))
@@ -40,7 +43,11 @@ def call_instruction(instruction_name: str):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Run different functions.")
     parser.add_argument("--instruction_list", help="list all available instructions", action="store_true")
-    parser.add_argument("config_path", help="Path to the config file (e.g., train_config/base_train.json)")
+    parser.add_argument(
+        "config_path",
+        nargs="?",
+        help="Path to the config file (e.g., train_config/base_train.json)",
+    )
     args = parser.parse_args()
 
     if args.instruction_list:
@@ -48,5 +55,5 @@ if __name__ == "__main__":
     elif args.config_path:
         call_instruction(args.config_path)
     else:
-        print("Please provide an instruction or use --instruction_list to see available instructions.")
+        parser.print_help()
 

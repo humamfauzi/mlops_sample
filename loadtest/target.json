@@ -1,0 +1,10 @@
+{
+  "model": "68IHBV",
+  "query": {
+    "NAICS": "326",
+    "SHIPMENT_WEIGHT": 20000,
+    "SHIPMENT_DISTANCE_ROUTE": 500,
+    "MODE": "4",
+    "SCTG": "35"
+  }
+}

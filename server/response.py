@@ -22,14 +22,27 @@ class Response(ABC):
 
 @dataclass
 class HealthResponse(Response):
-    """Response structure for the health endpoint"""
+    """Response structure for the health endpoint
+
+    Reports how many published models actually loaded. A server with zero
+    loaded models is not serving anything useful, so it reports 503 rather
+    than a misleading 200 "ok".
+    """
     status: str
-    def to_dict(self) -> Dict[str, str]:
+    model_count: int = 0
+    failed: int = 0
+    failures: Dict[str, str] = field(default_factory=dict)
+    http_status: int = 200
+
+    def to_dict(self) -> Dict[str, Any]:
         return {
-            "status": self.status
+            "status": self.status,
+            "model_count": self.model_count,
+            "failed": self.failed,
+            "failures": self.failures,
         }
     def to_json_response(self) -> JSONResponse:
-        return JSONResponse(status_code=200, content=self.to_dict())
+        return JSONResponse(status_code=self.http_status, content=self.to_dict())
 
 @dataclass
 class ListResponse(Response):
