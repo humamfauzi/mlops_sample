@@ -164,6 +164,14 @@ class CommodityFlow(Enum):
 
             cls.EXPORT_COUNTRY.name,
             cls.HAZMAT.name,
+
+            # Y/N flags. They are categorical rather than numerical so that the
+            # cleaner casts them to strings and one-hot encoding can be applied.
+            # Both were previously in neither categorical() nor numerical(), so
+            # the manifest builder dropped them without a word and any model
+            # trained on them could never be fed by the server.
+            cls.IS_TEMPERATURE_CONTROLLED.name,
+            cls.IS_EXPORT.name,
         ]
 
     @classmethod
@@ -190,10 +198,17 @@ class CommodityFlow(Enum):
 
 
 class SampleEnumTransformer(Enum):
+    # Positional schema for the synthetic smoke-test fixture. Every member must
+    # be classified as the id, the target, numerical or categorical -- the
+    # manifest builder rejects a column it cannot account for.
     COLUMN_ID = 1
     COLUMN_CATEGORICAL = 2
     COLUMN_NUMERICAL = 3
     COLUMN_TARGET = 4
+
+    @classmethod
+    def primary_id(cls):
+        return cls.COLUMN_ID.name
 
     @classmethod
     def categorical(cls):

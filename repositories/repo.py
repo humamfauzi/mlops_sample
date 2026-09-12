@@ -1,5 +1,4 @@
-import math
-from random import random
+import random
 from repositories.sqlite import SQLiteRepository, ObjectStorage as SQLiteObjectStorage
 from repositories.struct import TransformationInstruction, TransformationObject, ModelObject
 from repositories.disk import Disk
@@ -90,9 +89,21 @@ class Facade:
         self.repository.new_property(self.current_run_id, "name.description", description)
         return self
 
-    def generate_run_id(self):
-        source = "ABCDEFGHIJKLMNOPQRSTUVWXYZ12345678890"
-        return ''.join([source[math.floor(random()*len(source))] for _ in range(6)])
+    def generate_run_id(self, attempts: int = 100):
+        """A short run name not already present in the repository.
+
+        Six characters is roughly 2.2 billion combinations, so collisions are
+        unlikely -- but they are not impossible, and a collision silently
+        resolves to the wrong model. Checking is cheap.
+        """
+        source = "ABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890"
+        for _ in range(attempts):
+            candidate = "".join(random.choice(source) for _ in range(6))
+            if not self.repository.run_name_exists(candidate):
+                return candidate
+        raise RuntimeError(
+            f"Could not generate a unique run id after {attempts} attempts"
+        )
 
     def new_child_run(self, name: str):
         new_run_id = self.repository.new_child_run(name, self.current_run_id, self.experiment_id)
@@ -243,7 +254,9 @@ class Facade:
         return self.repository.get_intent(run_id)
 
     def get_model_run_id(self, model_id: str):
-        return self.repository.get_model_run_id(model_id)
+        # Scoped to the run being trained: run names are short and only unique
+        # by luck, so an unscoped lookup could return another run's model.
+        return self.repository.get_model_run_id(model_id, self.current_run_id)
 
     def nominate_for_publishing(self, intent: str, primary_metric: str, current_score: float, current_model_id: int):
         id, previous_score = self.repository.select_previously_published(self.experiment_id, intent, primary_metric)

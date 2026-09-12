@@ -117,12 +117,41 @@ class Transformer:
         return c
 
     def _save_manifest(self, df: pd.DataFrame):
+        """Record the input contract the server will validate against.
+
+        Every column surviving cleaning must be accounted for: either it is the
+        target, it is the primary id, or it is classified as numerical or
+        categorical. A column in none of those buckets used to be dropped
+        silently, which produced a model the server could never feed -- the
+        failure only appeared at inference time, long after training.
+        """
         if self.facade is None:
             return self
-        inputs = set(df.columns.to_list()) - set([self.column.target()])
+
+        target = self.column.target()
+        primary_id = self.column.primary_id()
+        numerical = set(self.column.numerical())
+        categorical = set(self.column.categorical())
+
+        unclassified = [
+            col for col in df.columns
+            if col not in (target, primary_id)
+            and col not in numerical
+            and col not in categorical
+        ]
+        if unclassified:
+            raise ValueError(
+                f"Cannot build the transformation manifest: {unclassified} are "
+                f"neither numerical nor categorical in "
+                f"{type(self.column).__name__}. Classify them, or exclude them "
+                f"with a filter_columns step. Dropping them silently would "
+                f"produce a model the server cannot feed."
+            )
+
+        inputs = [col for col in df.columns if col not in (target, primary_id)]
         column_properties = []
         for col in inputs:
-            if col in self.column.numerical():
+            if col in numerical:
                 minn, maxx = df[col].min(), df[col].max()
                 column_properties.append({
                     "name": col,
@@ -130,7 +159,7 @@ class Transformer:
                     "min": int(minn),
                     "max": int(maxx)
                 })
-            elif col in self.column.categorical():
+            elif col in categorical:
                 uniques = df[col].unique().tolist()
                 column_properties.append({
                     "name": col,

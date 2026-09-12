@@ -43,8 +43,12 @@ class Repository:
     def get_intent(self, run_id: int = None):
         return None
 
-    def get_model_run_id(self, model_id: str) -> tuple[int, str]:
+    def get_model_run_id(self, model_id: str, parent_run_id: int = None) -> tuple[int, str]:
         return 0, ""
+
+    def run_name_exists(self, name: str) -> bool:
+        # The null backend stores nothing, so every generated name is free.
+        return False
 
     def select_previously_published(self, experiment_id: str, intent: str, primary_metric: str):
         return None, None

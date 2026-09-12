@@ -149,14 +149,34 @@ class SQLiteRepository:
             results = c.fetchall()
             return [{"id": id, "name": name} for id, name in results]
     
-    def get_model_run_id(self, model_name: str):
+    def get_model_run_id(self, model_name: str, parent_run_id: int = None):
+        """Resolve a model's short run name to (id, parent_id).
+
+        Scoped to the parent run when one is supplied. Names are six characters
+        drawn from a 36-symbol alphabet, so they are only unique by luck; an
+        unscoped lookup would silently return another run's model on a
+        collision, and the caller would nominate the wrong thing.
+        """
         with sqlite3.connect(self.name) as conn:
             c = conn.cursor()
-            c.execute('SELECT id, parent_id FROM runs WHERE name = ?', (model_name,))
+            if parent_run_id is None:
+                c.execute('SELECT id, parent_id FROM runs WHERE name = ?', (model_name,))
+            else:
+                c.execute(
+                    'SELECT id, parent_id FROM runs WHERE name = ? AND parent_id = ?',
+                    (model_name, parent_run_id),
+                )
             result = c.fetchone()
             if result:
                 return result  # return run id
-            raise ValueError(f"Model with name {model_name} not found")
+            scope = "" if parent_run_id is None else f" under parent run {parent_run_id}"
+            raise ValueError(f"Model with name {model_name} not found{scope}")
+
+    def run_name_exists(self, name: str) -> bool:
+        with sqlite3.connect(self.name) as conn:
+            c = conn.cursor()
+            c.execute('SELECT 1 FROM runs WHERE name = ? LIMIT 1', (name,))
+            return c.fetchone() is not None
 
     def get_intent(self, run_id: int):
         with sqlite3.connect(self.name) as conn:
@@ -168,6 +188,12 @@ class SQLiteRepository:
             raise ValueError(f"Intent not found for run id {run_id}")
 
     def select_previously_published(self, experiment_id: str, intent: str, primary_metric: str):
+        """Best score among the runs currently published for this intent.
+
+        Ordered explicitly rather than relying on row order. The score being
+        compared is the published run's *best* child, so a lower value wins for
+        the error metrics this project uses.
+        """
         with sqlite3.connect(self.name) as conn:
             c = conn.cursor()
             query = '''
@@ -179,12 +205,14 @@ class SQLiteRepository:
                 JOIN metrics m ON rc.id = m.run_id
                 WHERE t.key = 'status.deployment' AND t.value = 'published'
                     AND p.key = 'name.intent' AND p.value = ? AND r.experiment_id = ? AND m.key = ?
+                ORDER BY m.value ASC, r.id ASC
+                LIMIT 1
             '''
             c.execute(query, (intent, experiment_id, f"validation.test.{primary_metric}"))
-            result = c.fetchall()
-            if len(result) == 0:
+            result = c.fetchone()
+            if result is None:
                 return None, float('inf')
-            return result[0]
+            return result
 
     def upsert_tag(self, run_id: int, key: str, value: str):
         with sqlite3.connect(self.name) as conn:

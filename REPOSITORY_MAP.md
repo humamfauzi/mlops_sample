@@ -1159,6 +1159,10 @@ This is **F-01** — the noop backend's `get_intent` was never updated when the 
 
 Severity: 🔴 high · 🟠 medium · 🟡 low
 
+> **Status.** F-06, F-07 and F-08 are **fixed** (see the notes on each). The
+> rest remain open. F-05 in particular is still live and is the most impactful
+> of the remaining items.
+
 ### 🔴 F-01 — Unit test suite is red; CI masks the rest
 
 **Where:** `repositories/noop.py:43` vs `repositories/repo.py:258`, `repositories/sqlite.py:161`
@@ -1193,26 +1197,27 @@ Severity: 🔴 high · 🟠 medium · 🟡 low
 **Affected configs:** `baseline.json`, `log_transform.json`, `log_transform_100k.json`, `log_transform_1m.json`, `ohe_naics.json`, `standard_scaler.json`, `ohe_export_hazmat.json`, `ohe_mode.json`, `distance_log.json` — all use multi-metric lists with a non-final primary. (The three *published* runs are unaffected: their configs use `metrics: ["mae"]`.)
 **Fix:** Have `test()` return `mm[self.primary_metric](...)` explicitly, or read the stored metric by key rather than by return value.
 
-### 🟠 F-06 — Nomination query is nondeterministic
+### 🟠 F-06 — Nomination query is nondeterministic — **FIXED**
 
 **Where:** `repositories/sqlite.py:170-187`
-**What:** The query `SELECT r.id, m.value ... WHERE t.value='published' AND p.value=? AND m.key=?` has **no `ORDER BY` and no `LIMIT`**; the code takes `result[0]`. If a published parent run has more than one child carrying `validation.test.<metric>`, the "previous best" is whichever row SQLite returns first — unspecified.
-**Impact:** Promotion decisions can differ between runs of the same code. Reproducibility of the champion is not guaranteed.
-**Fix:** Add `ORDER BY m.value ASC LIMIT 1`.
+**What:** The query `SELECT r.id, m.value ... WHERE t.value='published' AND p.value=? AND m.key=?` has **no `ORDER BY` and no `LIMIT`**; the code took `result[0]`. If a published parent run has more than one child carrying `validation.test.<metric>`, the "previous best" was whichever row SQLite returned first — unspecified.
+**Reality check:** currently latent, not active. Every published run in `example.db` has exactly **one** child carrying `validation.test.*`, because `ModelTrainer.execute` only calls `check_model_against_test` on the best model. So the join returns at most one row today.
+**Fixed:** added `ORDER BY m.value ASC, r.id ASC LIMIT 1`, which also makes the semantics explicit — the comparison is against the published run's *best* child. Covered by `train/test_registry.py::TestSelectPreviouslyPublished`.
 
-### 🟠 F-07 — Model lookup by 6-char name is unqualified
+### 🟠 F-07 — Model lookup by 6-char name is unqualified — **FIXED**
 
 **Where:** `repositories/repo.py:111-113` (generator), `repositories/sqlite.py:152-159` (`WHERE name = ?`)
-**What:** Run IDs are 6 chars from a 36-symbol alphabet using `random.random()`, with no uniqueness check on generation and no `experiment_id`/`parent_id` filter on lookup. A collision silently resolves to the wrong run — and therefore the wrong model.
-**Impact:** Low probability per run, but 91 runs (~51 child IDs) accumulate; the failure mode is silent and produces confidently wrong predictions.
-**Fix:** Add `AND parent_id = ?` (or a UNIQUE constraint + retry loop).
+**What:** Run IDs are 6 chars from a 36-symbol alphabet, with no uniqueness check on generation and no `experiment_id`/`parent_id` filter on lookup. A collision silently resolves to the wrong run — and therefore the wrong model.
+**Reality check:** currently latent. `example.db` holds 91 runs with 91 **distinct** names, so no collision has occurred.
+**Also found:** the alphabet literal was `"...12345678890"` — a duplicated `8` and no `0`, so `8` was twice as likely as any other character.
+**Fixed:** `get_model_run_id` takes an optional `parent_run_id` and `Facade.get_model_run_id` scopes it to the run being trained; `generate_run_id` now retries until `run_name_exists` is false and raises after N attempts; the alphabet is corrected. Covered by `train/test_registry.py::TestModelRunLookup` and `::TestRunNameUniqueness`.
 
-### 🟠 F-08 — Manifest silently drops columns that are neither numerical nor categorical
+### 🟠 F-08 — Manifest silently drops columns that are neither numerical nor categorical — **FIXED**
 
-**Where:** `train/data_transform.py:130-152`, `train/column.py:146-174`
-**What:** `_save_manifest` only emits columns found in `column.numerical()` or `column.categorical()`. In `CommodityFlow`, **`IS_EXPORT` and `IS_TEMPERATURE_CONTROLLED` are in neither list.**
-**Impact:** Any config using these columns (explicitly planned in `README.md:250-252`, items 6–8) trains on a feature that **never enters the API manifest** — so the server would reject it and the model would be undeployable, with no error at training time.
-**Fix:** Add the two columns to `categorical()`, or make `_save_manifest` raise on unmapped columns.
+**Where:** `train/data_transform.py:130-152`, `column/cfs2017.py:146-174`
+**What:** `_save_manifest` only emitted columns found in `column.numerical()` or `column.categorical()`. In `CommodityFlow`, **`IS_EXPORT` and `IS_TEMPERATURE_CONTROLLED` were in neither list.**
+**Impact:** Any config using these columns (explicitly planned in `README.md:250-252`, items 6–8) trained on a feature that **never entered the API manifest** — the server would reject it and the model would be undeployable, with no error at training time.
+**Fixed:** both flags are now classified as categorical, and `_save_manifest` **raises** naming any column it cannot account for, excluding only the target and the primary id. This surfaced a further instance immediately: `SampleEnumTransformer` had no `primary_id()` at all, which the new check requires. Covered by `train/test_data_transform.py::TestManifest` and `::TestCommodityFlowClassification`, including an assertion that all 20 `CommodityFlow` members are classified somewhere.
 
 ### 🟠 F-09 — `example.db` is the single point of failure and is not backed up anywhere
 

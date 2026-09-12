@@ -17,7 +17,20 @@
 | 4 — Unify configuration | ✅ done | `da2bb54` |
 | 5 — Retire the legacy stack | ✅ done | `a8b047b` |
 | 6 — Close the deployment loop | ⬜ not started — target decided: installed binary, no containers | |
-| 7 — Harden the registry | ⬜ not started | |
+| 7 — Harden the registry | 🟡 partial — F-06, F-07, F-08 done; F-05 and the rest open | *(this phase)* |
+
+### Phase 7 progress
+
+| ID | Status | Notes |
+|---|---|---|
+| **F-06** | ✅ fixed | `ORDER BY m.value ASC, r.id ASC LIMIT 1` in `select_previously_published`. Latent: every published run currently has exactly one test-scored child. |
+| **F-07** | ✅ fixed | Model lookup scoped to the parent run; run-ID generation retries on collision; also corrected the alphabet literal (`12345678890` had a duplicated `8` and no `0`). Latent: 91 runs, 91 distinct names. |
+| **F-08** | ✅ fixed | `IS_EXPORT` / `IS_TEMPERATURE_CONTROLLED` classified as categorical, and `_save_manifest` now raises on any column it cannot account for. Also required adding the missing `primary_id()` to `SampleEnumTransformer`. |
+| **F-05** | ⬜ open | Nomination compares mismatched metrics when `primary_metric` is not last in `metrics`. Affects 9 configs — **the highest-impact item still outstanding**. |
+| F-09 | ⬜ open | Version `example.db` under DVC |
+| F-14 | ⬜ open | Unimplemented config options fail silently rather than raising |
+| F-15/F-16 | ⬜ open | Post-test loader performance; discarded validation prediction |
+| F-18 | ⬜ open | Empty `experiments` table, unused `audit_logs`, unused blob hashes |
 
 **Phase 4** introduced `runtime_config.py` + `config/runtime.json`. Both the
 trainer (`ScenarioManager._resolve_repository`) and the server
