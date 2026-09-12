@@ -1,97 +1,74 @@
-name: Build Executable
+name: Build and Verify Executable
 
+# The deployed artifact is a PyInstaller binary, not a container image. Building
+# on every push to main is what keeps dist/ from silently drifting behind the
+# source -- a stale server binary once shipped with a storage backend it did not
+# understand, and nothing in the repository could detect it.
 on:
+  push:
+    branches: [main]
+  pull_request:
   workflow_dispatch:
     inputs:
-      os_type:
-        description: 'OS to build for'
-        required: false
-        default: 'centos'
-        type: choice
-        options:
-          - 'centos'
-          - 'ubuntu'
       python_version:
-        description: 'Python version to use'
+        description: 'Python version to build with'
         required: false
-        default: '3.11'
+        default: '3.10'
         type: string
 
 jobs:
-  build-centos:
-    if: ${{ inputs.os_type == 'centos' }}
+  build:
     runs-on: ubuntu-latest
-    container:
-      image: centos:7  # or centos:stream9 for newer version
-    
     steps:
-      - name: Install git and dependencies
-        run: |
-          yum install -y git gcc make openssl-devel bzip2-devel libffi-devel zlib-devel wget curl
-      
-      - name: Install Python from source
-        run: |
-          cd /tmp
-          wget https://www.python.org/ftp/python/${{ inputs.python_version }}.0/Python-${{ inputs.python_version }}.0.tgz
-          tar xzf Python-${{ inputs.python_version }}.0.tgz
-          cd Python-${{ inputs.python_version }}.0
-          ./configure --enable-optimizations
-          make altinstall
-          ln -sf /usr/local/bin/python${{ inputs.python_version }} /usr/local/bin/python3
-          ln -sf /usr/local/bin/pip${{ inputs.python_version }} /usr/local/bin/pip3
-      
-      - name: Checkout code
+      - name: Checkout
         uses: actions/checkout@v4
-      
-      - name: Install uv
-        run: |
-          curl -LsSf https://astral.sh/uv/install.sh | sh
-          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
-      
-      - name: Install dependencies with uv
-        run: |
-          uv pip install --system pyinstaller
-          uv pip install --system .
-      
-      - name: Build executable with PyInstaller
-        run: |
-          pyinstaller --onefile --name mlops_server server/inference.py
-      
-      - name: Upload executable artifact
-        uses: actions/upload-artifact@v4
         with:
-          name: mlops-executable-centos-${{ github.sha }}
-          path: dist/*
-          retention-days: 30
+          # Full history so tools/stamp_build.py can resolve the real SHA.
+          fetch-depth: 0
+          persist-credentials: false
 
-  build-ubuntu:
-    if: ${{ inputs.os_type == 'ubuntu' }}
-    runs-on: ubuntu-latest
-    
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-      
-      - name: Set up Python
-        uses: actions/setup-python@v4
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v5
         with:
-          python-version: ${{ inputs.python_version }}
-      
-      - name: Install uv
-        uses: astral-sh/setup-uv@v3
-      
-      - name: Install dependencies with uv
+          enable-cache: true
+
+      - name: Set up Python
+        run: uv python install ${{ inputs.python_version || '3.10' }}
+
+      - name: Install dependencies
+        # --frozen: build exactly what uv.lock pins, never re-resolve.
+        run: uv sync --frozen
+
+      - name: Stamp build provenance
+        run: uv run python tools/stamp_build.py
+
+      - name: Build train_module
         run: |
-          uv pip install --system pyinstaller
-          uv pip install --system .
-      
-      - name: Build executable with PyInstaller
+          uv run pyinstaller --onefile --name train_module \
+            --distpath ./dist --clean train/main.py
+
+      - name: Build server_module
         run: |
-          pyinstaller --onefile --name mlops_server server/inference.py
-      
-      - name: Upload executable artifact
+          uv run pyinstaller --onefile --name server_module \
+            --distpath ./dist --clean \
+            --hidden-import=sklearn.ensemble \
+            --hidden-import=train.wrapper \
+            server/launcher.py
+
+      - name: Verify train_module boots and reports provenance
+        run: |
+          ./dist/train_module --version
+          ./dist/train_module --instruction_list
+
+      - name: Smoke test server_module
+        run: ./scripts/smoke_test.sh ./dist/server_module "$(git rev-parse HEAD)"
+
+      - name: Upload binaries
         uses: actions/upload-artifact@v4
         with:
-          name: mlops-executable-ubuntu-${{ github.sha }}
-          path: dist/*
+          name: mlops-binaries-${{ github.sha }}
+          path: |
+            dist/train_module
+            dist/server_module
           retention-days: 30
+          if-no-files-found: error

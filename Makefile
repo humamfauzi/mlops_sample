@@ -122,15 +122,30 @@ serve:
 build-train-module:
 	@echo "Building PyInstaller binary for train/main.py..."
 	mkdir -p dist
+	uv run python tools/stamp_build.py
 	uv run pyinstaller --onefile --name train_module --distpath ./dist --clean train/main.py
 
 build-server-module:
 	@echo "Building PyInstaller binary for server/launcher.py..."
 	mkdir -p dist
+	uv run python tools/stamp_build.py
 	uv run pyinstaller --onefile --name server_module --distpath ./dist --clean \
 		--hidden-import=sklearn.ensemble \
 		--hidden-import=train.wrapper \
 		server/launcher.py
+
+# build both deployed binaries, stamped with the commit they came from
+build-binaries: build-train-module build-server-module
+	@echo "built:"; ls -la dist/train_module dist/server_module
+
+# verify a built binary actually starts, serves, and matches HEAD.
+# This is the check that catches a stale dist/ artifact.
+smoke-test:
+	PYTHON=$(PYTHON) ./scripts/smoke_test.sh ./dist/server_module "$$(git rev-parse HEAD)"
+
+# build the fixture registry the smoke test runs against
+smoke-fixture:
+	uv run python scripts/make_fixture_db.py .smoke/fixture
 
 train-all:
 	for file in $(wildcard train_config/*); do \

@@ -1,21 +1,30 @@
-name: Auto Test
-on: [push]
+name: Test
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
 
 jobs:
-  build:
+  test:
     runs-on: ubuntu-latest
-    container:
-      # pulling container seems take time and eating resources
-      # manually adding packages is a good option with
-      # compromise in replicability
-      # for now we use docker container but we open to other solutions
-      image: humamf/dsmlflow:stable
-      options: --user root
     steps:
-      - name: Set permissions
-        run: | 
-          sudo chmod -R 777 $GITHUB_WORKSPACE
-      - uses: actions/checkout@v2
-      - run: pip install pytest
-      - name: Test all
-        run: make test
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Set up Python
+        run: uv python install 3.10
+
+      # Dependencies come from uv.lock, not from a prebuilt third-party image.
+      # The previous setup pulled humamf/dsmlflow:stable, an image this
+      # repository no longer builds, so the toolchain was unreproducible.
+      - name: Install dependencies
+        run: uv sync --frozen
+
+      - name: Run test suite
+        run: uv run pytest --disable-warnings --ignore=pgdata -vv
