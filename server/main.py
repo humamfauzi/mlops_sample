@@ -10,6 +10,7 @@ from contextlib import asynccontextmanager
 from repositories.repo import Facade
 from dotenv import load_dotenv, find_dotenv
 
+import buildinfo
 import server.response as response
 from server.inference import InferenceManager
 from server.error import UserError
@@ -90,9 +91,11 @@ lifespan(app)
 
 @app.get("/health")
 async def health():
+    build = buildinfo.describe()
     if model is None:
         return response.HealthResponse(
             status="unavailable",
+            build=build,
             http_status=503,
         ).to_json_response()
     h = model.health()
@@ -102,6 +105,7 @@ async def health():
             model_count=0,
             failed=h["failed"],
             failures=h["failures"],
+            build=build,
             http_status=503,
         ).to_json_response()
     return response.HealthResponse(
@@ -109,6 +113,7 @@ async def health():
         model_count=h["loaded"],
         failed=h["failed"],
         failures=h["failures"],
+        build=build,
         http_status=200,
     ).to_json_response()
 

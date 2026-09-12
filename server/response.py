@@ -32,6 +32,7 @@ class HealthResponse(Response):
     model_count: int = 0
     failed: int = 0
     failures: Dict[str, str] = field(default_factory=dict)
+    build: Dict[str, str] = field(default_factory=dict)
     http_status: int = 200
 
     def to_dict(self) -> Dict[str, Any]:
@@ -40,6 +41,7 @@ class HealthResponse(Response):
             "model_count": self.model_count,
             "failed": self.failed,
             "failures": self.failures,
+            "build": self.build,
         }
     def to_json_response(self) -> JSONResponse:
         return JSONResponse(status_code=self.http_status, content=self.to_dict())

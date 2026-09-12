@@ -2,7 +2,8 @@ from train.scenario_manager import ScenarioManager, InstructionFactory
 import os
 import argparse
 import json
-from pprint import pprint
+
+import buildinfo
 
 DATASET_PATH = "dataset"
 TRACKER_PATH = os.getenv("TRACKER_PATH")
@@ -43,6 +44,12 @@ def call_instruction(instruction_name: str):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Run different functions.")
     parser.add_argument("--instruction_list", help="list all available instructions", action="store_true")
+    _prov = buildinfo.describe()
+    parser.add_argument(
+        "--version",
+        action="version",
+        version=f"train_module {_prov['version']} (git {_prov['git_sha']}, built {_prov['build_time']})",
+    )
     parser.add_argument(
         "config_path",
         nargs="?",
