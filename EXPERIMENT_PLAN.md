@@ -10,7 +10,7 @@
 | B1 — `HistGradientBoostingRegressor` | ✅ done | in `model_routing`; ~25× faster and more accurate (below) |
 | B2 — `loss="absolute_error"` usable | ✅ done | plain hyperparameter, no code change needed |
 | C — the experiments | ⬜ next | |
-| D — evaluation discipline | 🟡 partially | D1/D2 available via `scripts/post_test_benchmark.py`; promotion metric still uses the proxy |
+| D — evaluation discipline | 🟡 re-scoped | D3 (promote on dollars) **withdrawn** — see Phase D. D1/D2 (stable selection + ranged reporting) is the replacement. |
 
 **A regression found and fixed while doing this.** The F-08 change to
 `_save_manifest` wrote the manifest in dataframe order while the model was
@@ -72,6 +72,12 @@ $7,310. The registry says otherwise.
 
 Recorded figures understate error by **19% to 103%**.
 
+> **These corrected numbers are single draws too.** Seed 42 at 100k rows. Run 73
+> measured across five seeds gives a median of **$10,563** with a range of
+> $8,485–$11,394. Treat every dollar figure in this document as ±30% until it
+> says otherwise. The *log-space* figures are stable to about ±0.005 and are
+> what the plan selects on.
+
 ### Defect 1 — the sample is 1,000 rows, not 100,000
 
 `PostTest.parse_instruction` reads the sample size from the step's
@@ -116,7 +122,10 @@ is segment-scoped for the same reason.
 **The consequence is a wrong champion.** Run 76 has ~6× lower dollar error than
 run 81 on its own segment, but is tagged `inferior` because its segment-scoped
 log-space MAE (1.080) was worse than run 81's (0.784). The competition compares
-numbers computed on different populations.
+numbers computed on **different populations**.
+
+Note this is a *population* defect, not a *metric* defect. It does not justify
+promoting on dollar error — see Phase D for why that was withdrawn.
 
 ### Defect 3 (minor) — MODE encoding is load-bearing
 
@@ -285,51 +294,132 @@ this segment needs *features* more than capacity.
 **C6 — All-modes with the winning configuration**, so the headline number is
 measured against the config that actually wins, not against the segment model.
 
-### Phase D — Evaluation discipline
+### Phase D — Evaluation discipline (re-scoped)
 
-1. **Measure at ≥100,000 rows**, fixed seed, always.
-2. **Report both metrics**: log-space test MAE *and* dollar post-test MAE.
-3. **Promote on the honest metric.** Nomination currently compares
-   `validation.test.<primary_metric>`, which is the proxy. Given how far the
-   proxy and the dollar metric diverge across segments, promotion should use
-   `validation.post_test.mae` whenever a config produces one. That is a change
-   to `ModelTrainer.nominate_for_publishing` (which metric key it passes) plus
-   the config's `primary_metric`.
-4. **Never compare across populations.** One intent = one evaluation set.
+**The original D3 — "promote on `post_test.mae`" — is withdrawn.** It was wrong,
+and the measurements below are why. Phase D is now about deciding what can be
+trusted, not about changing the promotion metric.
+
+#### What was wrong
+
+The *mechanism* is real. Log error is `|log(ŷ) − log(y)|`, a ratio and therefore
+scale-invariant; dollar error is `|ŷ − y|`, absolute. Two $100,000 shipments:
+
+| | predicts | log errors | log MAE | dollar errors | dollar MAE |
+|---|---|---|---|---|---|
+| A | $20, $100,000 | 0.693, 0 | **0.347** | $10, $0 | **$5** |
+| B | $10, $200,000 | 0, 0.693 | **0.347** | $0, $100,000 | **$50,000** |
+
+Identical log MAE, dollar MAE differing 10,000×. On the real data, per-row log
+error and per-row dollar error correlate at **0.040**:
+
+```
+worst 0.1% of rows  ->  42.2% of total dollar error,  but 0.3% of total log error
+worst  25% of rows  ->  96.6% of total dollar error,  but 34.0% of total log error
+```
+
+So the two metrics are close to orthogonal. But two further findings kill the
+fix I proposed:
+
+**1. The example I used was invalid.** I cited run 76 ($1,458) losing to run 81
+($9,098). Those are evaluated on *different populations* — parcel rows vs air
+rows — so the comparison is meaningless whichever metric you use. That is
+Defect 2, which Phase A2 already fixed. It is not evidence about metrics.
+
+**2. Dollar MAE does not converge on this data.** The same model, five different
+100k samples from the same CSV:
+
+```
+$8,123   $8,485   $9,672   $11,394   $10,563     (a 40% spread)
+```
+
+and a larger sample made it *worse*, not better:
+
+```
+500k rows:  $10,241   vs   $15,567
+```
+
+That is the target distribution, not a bug. `SHIPMT_VALUE` has a median of
+**$752** and a maximum of **$3.5 billion**. 78 shipments out of 5.98M — 0.0013%
+— hold **26% of all value**. In one 100k evaluation:
+
+```
+single worst row  ->  7.0% of the entire dollar MAE
+worst 10 rows     ->  drop them and MAE falls $9,672 -> $7,133   (26% swing)
+```
+
+Ten shipments out of 100,000 decide a quarter of the metric. Promoting on it
+would be promoting on which outlier happened to be drawn.
+
+**3. It is also structurally impossible as stated.** `post_test` runs *after*
+`model_trainer` in the pipeline fold, and `nominate_for_publishing` is called
+inside `ModelTrainer.execute`. At nomination time the candidate's post-test
+metric does not exist yet. D3 needed a pipeline reorder or a separate promotion
+stage, not the ~5 lines I claimed.
+
+#### What Phase D now is
+
+| # | Item | Rationale | Status |
+|---|---|---|---|
+| D1 | **Keep log-space for promotion.** | It is stable and low-variance, which is what model *selection* needs. | ✅ keep current behaviour |
+| D2 | **Report dollar MAE as a range, never a point.** `scripts/post_test_benchmark.py --seeds` runs several draws and prints min/median/max. | A single draw is ±40%. A difference under ~$2,000 is not real. | ⬜ to build |
+| D3 | **Never compare across populations.** One intent = one evaluation set. | Done in A2. | ✅ done |
+| D4 | **Attack the misalignment in the objective, not the promotion metric.** If dollars matter, the loss should reflect them — value-weighted loss, or `loss="absolute_error"` (already available). | The gap is that squared-error-on-log is not dollar error. Changing what the model optimises is the honest lever. | ⬜ Phase C |
+| D5 | **Decide explicitly about the tail.** Either winsorize predictions and actuals (say at p99.9) before computing dollar MAE so it converges, or accept it as a headline with wide error bars. | Do this deliberately rather than by accident — trimming changes what the metric means. | ⬜ to decide |
+| D6 | **Re-state the targets in a stable metric.** §5 previously quoted single-draw dollars. | Restated below. | ✅ below |
+
+#### Why D1 is not a cop-out
+
+Keeping the log-space proxy is not "ignoring the business metric". It is
+choosing a *stable* statistic to select on while being explicit that the dollar
+number is a headline with wide uncertainty. The alternative — selecting on a
+metric with a 40% sampling spread — is strictly worse: it would swap champions
+on noise.
+
+What would genuinely align the two is D4. If the model is trained to reduce
+something closer to dollar error, log-space and dollar-space stop being
+orthogonal and the proxy becomes a good proxy again. That is an experiment, not
+a promotion-policy change.
 
 ---
 
 ## 4. What I would change in code
 
-| # | File | Change | Size |
-|---|---|---|---|
-| 1 | `train/post_test.py` | sample size + seed from the `call`, not `properties` | ~6 lines |
-| 2 | `train/post_test.py` | drop or implement `check_against` | small |
-| 3 | `train/model.py` | add `hist_gradient_boosting_regressor` to `model_routing` | 2 lines |
-| 4 | `train/model.py` | allow promotion on `post_test.mae` | ~5 lines |
-| 5 | `train/data_cleaner.py` | an add-column / derive-column verb (for C4) | new method |
-| 6 | `train_config/*.json` | one intent per segment; new configs for C1–C6 | new files |
+| # | File | Change | Size | Status |
+|---|---|---|---|---|
+| 1 | `train/post_test.py` | sample size + seed from the `call`, not `properties` | ~6 lines | ✅ done |
+| 2 | `train/post_test.py` | validate `check_against` instead of ignoring it | small | ✅ done |
+| 3 | `train/model.py` | add `hist_gradient_boosting_regressor` to `model_routing` | 2 lines | ✅ done |
+| 4 | `column/cfs2017.py` | deterministic `feature()` order (regression fix) | small | ✅ done |
+| 5 | `scripts/post_test_benchmark.py` | `--seeds` for a range instead of a point (D2) | ~20 lines | ⬜ |
+| 6 | `train/data_cleaner.py` | an add-column / derive-column verb (for C4) | new method | ⬜ |
+| 7 | `train_config/*.json` | new configs for C1–C6 | new files | ⬜ |
 
-Only #1 and #3 gate the experiments. #1 is a bug fix that must land first,
-because every number currently in the registry came from the wrong sample.
+The promotion metric is **not** on this list any more.
 
 ---
 
 ## 5. What "beating it" means
 
-A concrete, falsifiable target:
+Restated in a metric that can resolve a difference. Dollar MAE at 100k rows has
+a spread of roughly ±$1,600, so a single-draw dollar target is unfalsifiable.
 
-| | current | target |
-|---|---|---|
-| air segment MAE (100k rows) | $9,098 | **< $8,100** (10% better) |
-| all-modes MAE (100k rows) | $9,672 | **< $9,000** |
-| log-space test MAE (all modes) | 0.849 | < 0.80 |
+| | current | target | resolvable? |
+|---|---|---|---|
+| log-space test MAE, air | 0.784 | **< 0.75** | ✅ spread is ~0.005 |
+| log-space test MAE, all modes | 0.849 | **< 0.82** | ✅ |
+| dollar MAE, air (100k, median of ≥5 seeds) | $9,098 | **< $8,100** | ⚠️ only as a multi-seed median |
+| dollar MAE, all modes (100k, median of ≥5 seeds) | $9,672 | **< $9,000** | ⚠️ same |
 
-The first is the one I would actually chase. It is the largest segment, the
-model is demonstrably underfit, and the fix is capacity plus features that are
-already in the CSV and already classified.
+**Select on log-space. Confirm with a multi-seed dollar median. Never on a
+single dollar draw.**
+
+The first target is the one to chase. Air is the largest segment (69.9% of
+rows), the model is demonstrably underfit (train/valid gap 0.005), and the
+lever is capacity plus features already present in the CSV and already
+classified.
 
 **Honest expectation:** C1 (capacity) and C2 (hazmat/quarter) are low-risk and
-should move air by 5–15%. C3 (state) is the interesting one — it could be worth
-more, or it could be mostly redundant with distance and commodity. C4 is the
-only one needing real code, and I would not start it until C1–C3 have reported.
+should move air by 5–15% in log space. C3 (state) is the interesting one — it
+could be worth more, or be largely redundant with distance and commodity. C4 is
+the only one needing real code, and I would not start it until C1–C3 report.

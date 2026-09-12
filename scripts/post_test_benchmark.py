@@ -67,22 +67,58 @@ def main(argv=None) -> int:
     ap.add_argument("run_id", type=int, help="parent run id holding the model")
     ap.add_argument("config", help="the train_config the run was produced from")
     ap.add_argument("--n-rows", type=int, default=100_000, help="rows to sample (default 100000)")
-    ap.add_argument("--seed", type=int, default=42)
+    ap.add_argument("--seed", type=int, default=42, help="single draw; ignored with --seeds")
+    ap.add_argument(
+        "--seeds",
+        type=int,
+        nargs="+",
+        metavar="S",
+        help="draw several samples and report the spread (recommended; see below)",
+    )
     args = ap.parse_args(argv)
 
-    post_test = build(args.run_id, args.config, args.n_rows, args.seed)
+    seeds = args.seeds if args.seeds else [args.seed]
+    post_test = build(args.run_id, args.config, args.n_rows, seeds[0])
+    inference = post_test.reconstruct_inference(args.run_id)
 
     started = time.time()
-    samples = post_test.pick_random_samples(args.n_rows, args.seed)
-    inference = post_test.reconstruct_inference(args.run_id)
-    scores = post_test.check(inference, samples, ["mae"])
+    scores = []
+    rows = []
+    for seed in seeds:
+        samples = post_test.pick_random_samples(args.n_rows, seed)
+        result = post_test.check(inference, samples, ["mae"])
+        scores.append(list(result.values())[0])
+        rows.append(len(samples))
     elapsed = time.time() - started
 
     print(f"run {args.run_id}  ({args.config})")
-    print(f"  sampled rows            {args.n_rows:>9,}")
-    print(f"  after the run's cleaner {len(samples):>9,}")
-    print(f"  post_test MAE           ${list(scores.values())[0]:>13,.2f}")
-    print(f"  elapsed                 {elapsed:>9.1f}s")
+    print(f"  rows drawn per sample   {args.n_rows:>9,}")
+    print(f"  rows after the cleaner  {min(rows):>9,}", end="")
+    print("" if min(rows) == max(rows) else f" .. {max(rows):,}")
+    print()
+
+    if len(scores) == 1:
+        print(f"  post_test MAE           ${scores[0]:>13,.2f}")
+        print()
+        print("  A single draw is not a measurement. The same model on different")
+        print("  100k samples of CFS 2017 varies by roughly 40%, because ten")
+        print("  shipments out of 100,000 can decide a quarter of this metric.")
+        print("  Re-run with --seeds 42 7 101 2024 31337 for a usable range.")
+    else:
+        ordered = sorted(scores)
+        median = ordered[len(ordered) // 2]
+        print(f"  post_test MAE           ${median:>13,.2f}   (median of {len(scores)})")
+        print(f"    min ${min(scores):>13,.2f}")
+        print(f"    max ${max(scores):>13,.2f}")
+        print(f"    spread            ${max(scores) - min(scores):>13,.2f}"
+              f"   ({100 * (max(scores) - min(scores)) / median:.0f}% of the median)")
+        if max(scores) - min(scores) > 0.2 * median:
+            print()
+            print("  This spread is wider than any improvement worth chasing.")
+            print("  Compare candidates on the median of several draws, or on")
+            print("  log-space test MAE, which is stable to about 0.005.")
+
+    print(f"\n  elapsed                 {elapsed:>9.1f}s")
     return 0
 
 
