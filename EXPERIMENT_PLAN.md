@@ -10,7 +10,7 @@
 | B1 — `HistGradientBoostingRegressor` | ✅ done | in `model_routing`; ~25× faster and more accurate (below) |
 | B2 — `loss="absolute_error"` usable | ✅ done | plain hyperparameter, no code change needed |
 | C — the experiments | ⬜ next | |
-| D — evaluation discipline | 🟡 re-scoped | D3 (promote on dollars) **withdrawn** — see Phase D. D1/D2 (stable selection + ranged reporting) is the replacement. |
+| D — evaluation discipline | 🟡 re-scoped | D3 (promote on dollars) **withdrawn** — see Phase D. D1 stable selection + D2 ranged reporting replace it; D2 built. |
 
 **A regression found and fixed while doing this.** The F-08 change to
 `_save_manifest` wrote the manifest in dataframe order while the model was
@@ -362,7 +362,7 @@ stage, not the ~5 lines I claimed.
 | # | Item | Rationale | Status |
 |---|---|---|---|
 | D1 | **Keep log-space for promotion.** | It is stable and low-variance, which is what model *selection* needs. | ✅ keep current behaviour |
-| D2 | **Report dollar MAE as a range, never a point.** `scripts/post_test_benchmark.py --seeds` runs several draws and prints min/median/max. | A single draw is ±40%. A difference under ~$2,000 is not real. | ⬜ to build |
+| D2 | **Report dollar MAE as a range, never a point.** `scripts/post_test_benchmark.py --seeds` runs several draws and prints min/median/max, and warns when a single draw is being read as a measurement. | A single draw is ±40%. A difference under ~$2,000 is not real. | ✅ built |
 | D3 | **Never compare across populations.** One intent = one evaluation set. | Done in A2. | ✅ done |
 | D4 | **Attack the misalignment in the objective, not the promotion metric.** If dollars matter, the loss should reflect them — value-weighted loss, or `loss="absolute_error"` (already available). | The gap is that squared-error-on-log is not dollar error. Changing what the model optimises is the honest lever. | ⬜ Phase C |
 | D5 | **Decide explicitly about the tail.** Either winsorize predictions and actuals (say at p99.9) before computing dollar MAE so it converges, or accept it as a headline with wide error bars. | Do this deliberately rather than by accident — trimming changes what the metric means. | ⬜ to decide |
@@ -391,7 +391,7 @@ a promotion-policy change.
 | 2 | `train/post_test.py` | validate `check_against` instead of ignoring it | small | ✅ done |
 | 3 | `train/model.py` | add `hist_gradient_boosting_regressor` to `model_routing` | 2 lines | ✅ done |
 | 4 | `column/cfs2017.py` | deterministic `feature()` order (regression fix) | small | ✅ done |
-| 5 | `scripts/post_test_benchmark.py` | `--seeds` for a range instead of a point (D2) | ~20 lines | ⬜ |
+| 5 | `scripts/post_test_benchmark.py` | `--seeds` for a range instead of a point (D2) | ~20 lines | ✅ done |
 | 6 | `train/data_cleaner.py` | an add-column / derive-column verb (for C4) | new method | ⬜ |
 | 7 | `train_config/*.json` | new configs for C1–C6 | new files | ⬜ |
 
