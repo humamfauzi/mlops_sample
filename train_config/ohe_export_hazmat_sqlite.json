@@ -1,23 +1,6 @@
-
 {
     "name": "ohe_export_hazmat_sqlite",
     "description": "Same as OHE export Hazmat but using SQLite as repository",
-    "repository": {
-        "experiment_id": "experiment_001",
-        "data": {
-            "type": "sqlite",
-            "properties": { 
-                "name": "example.db",
-                "migrate": true
-            }
-        },
-        "object": {
-            "type": "sqlite",
-            "properties": { 
-                "name": "example.db", "migrate": true 
-            }
-        }
-    },
     "instructions": [
         {
             "type": "data_io",
@@ -36,35 +19,55 @@
         },
         {
             "type": "data_cleaner",
-            "properties": { "type": "lazy_call",  "reference": "commodity_flow"},
-                
+            "properties": {
+                "type": "lazy_call",
+                "reference": "commodity_flow"
+            },
             "call": [
-                {"type": "filter_columns", "columns": ["shipment_weight", "shipment_value", "naics", "export_country", "hazmat"]},
-                {"type": "drop_na"}
+                {
+                    "type": "filter_columns",
+                    "columns": [
+                        "shipment_weight",
+                        "shipment_value",
+                        "naics",
+                        "export_country",
+                        "hazmat"
+                    ]
+                },
+                {
+                    "type": "drop_na"
+                }
             ]
         },
         {
             "type": "data_transformer",
-            "properties": { 
-                "type": "lazy_call", 
-                "reference": "commodity_flow" 
+            "properties": {
+                "type": "lazy_call",
+                "reference": "commodity_flow"
             },
             "call": [
                 {
                     "type": "log_transformation",
                     "condition": "replace",
-                    "columns": ["shipment_weight", "shipment_value"]
+                    "columns": [
+                        "shipment_weight",
+                        "shipment_value"
+                    ]
                 },
                 {
                     "type": "one_hot_encoding",
                     "condition": "append_and_remove",
-                    "columns": ["naics", "export_country", "hazmat"]
+                    "columns": [
+                        "naics",
+                        "export_country",
+                        "hazmat"
+                    ]
                 }
             ]
         },
         {
             "type": "model_trainer",
-            "properties": { 
+            "properties": {
                 "objective": "best_model",
                 "random_state": 42,
                 "fold": 5,
@@ -72,7 +75,10 @@
                     "type": "exhaustive"
                 },
                 "primary_metric": "rmse",
-                "metrics": ["mae", "rmse"]
+                "metrics": [
+                    "mae",
+                    "rmse"
+                ]
             },
             "call": [
                 {
@@ -82,5 +88,4 @@
             ]
         }
     ]
-
 }

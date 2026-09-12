@@ -1,5 +1,4 @@
 import asyncio
-import os
 from fastapi import FastAPI, Request 
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -11,6 +10,7 @@ from repositories.repo import Facade
 from dotenv import load_dotenv, find_dotenv
 
 import buildinfo
+import runtime_config
 import server.response as response
 from server.inference import InferenceManager
 from server.error import UserError
@@ -38,38 +38,35 @@ class TimeoutMiddleware(BaseHTTPMiddleware):
 # the model would be loaded. Once loaded, it would be accessed via API
 model: Optional[InferenceManager] = None
 
-def load_env() -> dict:
+def load_settings() -> dict:
+    """Resolve repository settings from .env layered over the shared config.
+
+    The trainer resolves the same structure through the same module, so the two
+    runtimes cannot disagree about which database they are using.
+    """
     try:
         dotenv_file = find_dotenv(usecwd=True)
         if dotenv_file:
             load_dotenv(dotenv_file, override=False)
     except Exception as e:
         raise ValueError("Failed to load .env file") from e
-    instruction = {
-        "experiment_id": os.getenv("EXPERIMENT_ID", "sample"),
-        "stage": os.getenv("STAGE", "dev"),
-        "column_reference": os.getenv("COLUMN_REFERENCE", "commodity_flow"),
-        "data": {
-            "type": os.getenv("REPOSITORY_DATA", "sqlite"),
-            "properties": {
-                "name": os.getenv("REPOSITORY_DATA_PATH", "example.db")
-            }
-        },
-        "object": {
-            "type": os.getenv("REPOSITORY_OBJECT", "sqlite"),
-            "properties": {
-                "name": os.getenv("REPOSITORY_OBJECT_PATH", "example.db")
-            }
-        }
-    }
-    return instruction
+    return runtime_config.load()
+
 
 @asynccontextmanager
 async def lifespan(app):
     global model
-    instruction = load_env()
-    repo = Facade.parse_instruction(instruction)
-    model = InferenceManager.parse_instruction(repo, {"experiment_id": instruction["experiment_id"], "column_reference": instruction["column_reference"]})
+    settings = load_settings()
+    # Log the resolved repository so a misconfigured deployment is obvious in
+    # the startup log rather than showing up as a mysterious empty model list.
+    # flush=True: stdout is block-buffered when the server runs under a process
+    # manager, so without it this line is lost on shutdown.
+    print(f"runtime config: {runtime_config.describe()}", flush=True)
+    repo = Facade.parse_instruction(settings)
+    model = InferenceManager.parse_instruction(repo, {
+        "experiment_id": settings["experiment_id"],
+        "column_reference": settings["column_reference"],
+    })
     try:
         yield
     finally:
@@ -92,10 +89,12 @@ lifespan(app)
 @app.get("/health")
 async def health():
     build = buildinfo.describe()
+    config = runtime_config.describe()
     if model is None:
         return response.HealthResponse(
             status="unavailable",
             build=build,
+            config=config,
             http_status=503,
         ).to_json_response()
     h = model.health()
@@ -106,6 +105,7 @@ async def health():
             failed=h["failed"],
             failures=h["failures"],
             build=build,
+            config=config,
             http_status=503,
         ).to_json_response()
     return response.HealthResponse(
@@ -114,6 +114,7 @@ async def health():
         failed=h["failed"],
         failures=h["failures"],
         build=build,
+        config=config,
         http_status=200,
     ).to_json_response()
 

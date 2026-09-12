@@ -1,0 +1,22 @@
+{
+  "_comment": "Repository and experiment settings shared by BOTH the training pipeline and the inference server. This is the single source of truth for where runs are recorded and where model/transformation artifacts live. Environment variables override any value here (see runtime_config.py).",
+
+  "experiment_id": "experiment_001",
+  "column_reference": "commodity_flow",
+
+  "data": {
+    "type": "sqlite",
+    "properties": {
+      "name": "example.db",
+      "migrate": true
+    }
+  },
+
+  "object": {
+    "type": "sqlite",
+    "properties": {
+      "name": "example.db",
+      "migrate": true
+    }
+  }
+}

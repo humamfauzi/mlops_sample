@@ -1,23 +1,6 @@
 {
     "name": "post_test_log_gboosting",
     "description": "Segment: parcel/courier shipments (MODE=14). Train a dedicated model on this high-volume, low-value segment to reduce error caused by mixing it with air and bulk shipments.",
-    "repository": {
-        "experiment_id": "experiment_001",
-        "data": {
-            "type": "sqlite",
-            "properties": {
-                "name": "example.db",
-                "migrate": true
-            }
-        },
-        "object": {
-            "type": "sqlite",
-            "properties": {
-                "name": "example.db",
-                "migrate": true
-            }
-        }
-    },
     "instructions": [
         {
             "type": "data_io",
@@ -36,13 +19,18 @@
         },
         {
             "type": "data_cleaner",
-            "properties": { "type": "lazy_call", "reference": "commodity_flow" },
+            "properties": {
+                "type": "lazy_call",
+                "reference": "commodity_flow"
+            },
             "call": [
                 {
                     "type": "filter_rows",
                     "column": "mode",
                     "operator": "in",
-                    "values": [14]
+                    "values": [
+                        14
+                    ]
                 },
                 {
                     "type": "filter_columns",
@@ -55,7 +43,9 @@
                         "sctg"
                     ]
                 },
-                { "type": "drop_na" }
+                {
+                    "type": "drop_na"
+                }
             ]
         },
         {
@@ -68,12 +58,20 @@
                 {
                     "type": "log_transformation",
                     "condition": "replace",
-                    "columns": ["shipment_weight", "shipment_value", "shipment_distance_route"]
+                    "columns": [
+                        "shipment_weight",
+                        "shipment_value",
+                        "shipment_distance_route"
+                    ]
                 },
                 {
                     "type": "one_hot_encoding",
                     "condition": "append_and_remove",
-                    "columns": ["naics", "mode", "sctg"]
+                    "columns": [
+                        "naics",
+                        "mode",
+                        "sctg"
+                    ]
                 }
             ]
         },
@@ -87,18 +85,32 @@
                     "type": "exhaustive"
                 },
                 "primary_metric": "mae",
-                "metrics": ["mae"]
+                "metrics": [
+                    "mae"
+                ]
             },
             "call": [
                 {
                     "model_type": "gradient_boosting_regressor",
                     "hyperparameters": {
-                        "n_estimators": [500],
-                        "learning_rate": [0.1],
-                        "max_depth": [7],
-                        "subsample": [0.8],
-                        "min_samples_leaf": [5],
-                        "random_state": [42]
+                        "n_estimators": [
+                            500
+                        ],
+                        "learning_rate": [
+                            0.1
+                        ],
+                        "max_depth": [
+                            7
+                        ],
+                        "subsample": [
+                            0.8
+                        ],
+                        "min_samples_leaf": [
+                            5
+                        ],
+                        "random_state": [
+                            42
+                        ]
                     }
                 }
             ]
@@ -116,7 +128,9 @@
                     "intent": "measure_outcome_actual_value",
                     "check_against": "random",
                     "n_samples": 100000,
-                    "metrics": ["mae"],
+                    "metrics": [
+                        "mae"
+                    ],
                     "seed": 42
                 }
             ]

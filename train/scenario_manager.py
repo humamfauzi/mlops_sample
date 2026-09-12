@@ -10,7 +10,7 @@ from train.data_transform import Transformer
 from train.model import ModelTrainer
 from train.post_test import PostTest
 from repositories.repo import Facade
-from repositories.repo import InferenceInstruction
+import runtime_config
 
 class InstructionFactory:
     def __init__(self):
@@ -29,7 +29,7 @@ class InstructionFactory:
             name=instruction["name"],
             description=instruction["description"],
             instructions=instructions,
-            repository=instruction["repository"]
+            repository=instruction.get("repository")
         )
 
 class InstructionEnum(Enum):
@@ -63,6 +63,8 @@ class Instruction:
     name: str
     description:str
     instructions: List[InstructionStep]
+    # None means "use the shared runtime configuration" (config/runtime.json).
+    # An explicit dict overrides it; {} selects the noop backends.
     repository: dict
 
 class ScenarioManager:
@@ -72,8 +74,22 @@ class ScenarioManager:
         self.facade: Facade = None
         self.cleaner: Cleaner = None
 
+    def _resolve_repository(self) -> dict:
+        """Repository settings for this run.
+
+        A train_config may carry an explicit `repository` block to override the
+        shared runtime configuration. An empty block ({}) selects the noop
+        backends, which is what the test suite relies on. Omitting the key
+        entirely means "use the shared configuration", so the trainer and the
+        server cannot disagree about where runs are recorded.
+        """
+        explicit = self.instruction.repository
+        if explicit is None:
+            return runtime_config.load()
+        return explicit
+
     def construct(self):
-        facade = Facade.parse_instruction(self.instruction.repository)
+        facade = Facade.parse_instruction(self._resolve_repository())
         facade.new_run(facade.generate_run_id())
         facade.set_intent(self.instruction.name)
         facade.set_description(self.instruction.description)
