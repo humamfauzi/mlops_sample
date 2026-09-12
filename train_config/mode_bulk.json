@@ -1,0 +1,125 @@
+{
+    "name": "post_test_log_gboosting",
+    "description": "Segment: bulk and specialized freight (MODE=02 private truck, 06 rail, 07 water, 08 pipeline, 11 other, 12 air+truck, 15 unknown, 16 multimodal). Train a dedicated model on this low-volume, high-value segment that contributes disproportionately to overall MAE.",
+    "repository": {
+        "experiment_id": "experiment_001",
+        "data": {
+            "type": "sqlite",
+            "properties": {
+                "name": "example.db",
+                "migrate": true
+            }
+        },
+        "object": {
+            "type": "sqlite",
+            "properties": {
+                "name": "example.db",
+                "migrate": true
+            }
+        }
+    },
+    "instructions": [
+        {
+            "type": "data_io",
+            "properties": {
+                "path": "dataset",
+                "file": "cfs_2017",
+                "format": "csv",
+                "reference": "commodity_flow"
+            },
+            "call": [
+                {
+                    "type": "load",
+                    "n_rows": 1000000
+                }
+            ]
+        },
+        {
+            "type": "data_cleaner",
+            "properties": { "type": "lazy_call", "reference": "commodity_flow" },
+            "call": [
+                {
+                    "type": "filter_rows",
+                    "column": "mode",
+                    "operator": "in",
+                    "values": [2, 6, 7, 8, 11, 12, 15, 16]
+                },
+                {
+                    "type": "filter_columns",
+                    "columns": [
+                        "shipment_weight",
+                        "shipment_value",
+                        "shipment_distance_route",
+                        "naics",
+                        "mode",
+                        "sctg"
+                    ]
+                },
+                { "type": "drop_na" }
+            ]
+        },
+        {
+            "type": "data_transformer",
+            "properties": {
+                "type": "lazy_call",
+                "reference": "commodity_flow"
+            },
+            "call": [
+                {
+                    "type": "log_transformation",
+                    "condition": "replace",
+                    "columns": ["shipment_weight", "shipment_value", "shipment_distance_route"]
+                },
+                {
+                    "type": "one_hot_encoding",
+                    "condition": "append_and_remove",
+                    "columns": ["naics", "mode", "sctg"]
+                }
+            ]
+        },
+        {
+            "type": "model_trainer",
+            "properties": {
+                "objective": "best_model",
+                "random_state": 42,
+                "fold": 5,
+                "parameter_grid": {
+                    "type": "exhaustive"
+                },
+                "primary_metric": "mae",
+                "metrics": ["mae"]
+            },
+            "call": [
+                {
+                    "model_type": "gradient_boosting_regressor",
+                    "hyperparameters": {
+                        "n_estimators": [500],
+                        "learning_rate": [0.05, 0.1],
+                        "max_depth": [7, 9],
+                        "subsample": [0.8],
+                        "min_samples_leaf": [3, 5],
+                        "random_state": [42]
+                    }
+                }
+            ]
+        },
+        {
+            "type": "post_test",
+            "properties": {
+                "path": "dataset",
+                "file": "cfs_2017",
+                "format": "csv",
+                "reference": "commodity_flow"
+            },
+            "call": [
+                {
+                    "intent": "measure_outcome_actual_value",
+                    "check_against": "random",
+                    "n_samples": 100000,
+                    "metrics": ["mae"],
+                    "seed": 42
+                }
+            ]
+        }
+    ]
+}

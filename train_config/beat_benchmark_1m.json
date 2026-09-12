@@ -1,0 +1,129 @@
+{
+    "name": "post_test_log_gboosting",
+    "description": "Scale up to 1M rows with the winning feature set (weight, distance_route, naics, mode, sctg). Keeps the best two hyperparameter combos from the 100k run to avoid an expensive full grid search at this scale.",
+    "repository": {
+        "experiment_id": "experiment_001",
+        "data": {
+            "type": "sqlite",
+            "properties": {
+                "name": "example.db",
+                "migrate": true
+            }
+        },
+        "object": {
+            "type": "sqlite",
+            "properties": {
+                "name": "example.db",
+                "migrate": true
+            }
+        }
+    },
+    "instructions": [
+        {
+            "type": "data_io",
+            "properties": {
+                "path": "dataset",
+                "file": "cfs_2017",
+                "format": "csv",
+                "reference": "commodity_flow"
+            },
+            "call": [
+                {
+                    "type": "load",
+                    "n_rows": 1000000
+                }
+            ]
+        },
+        {
+            "type": "data_cleaner",
+            "properties": { "type": "lazy_call", "reference": "commodity_flow" },
+            "call": [
+                {
+                    "type": "filter_columns",
+                    "columns": [
+                        "shipment_weight",
+                        "shipment_value",
+                        "shipment_distance_route",
+                        "naics",
+                        "mode",
+                        "sctg"
+                    ]
+                },
+                { "type": "drop_na" }
+            ]
+        },
+        {
+            "type": "data_transformer",
+            "properties": {
+                "type": "lazy_call",
+                "reference": "commodity_flow"
+            },
+            "call": [
+                {
+                    "type": "log_transformation",
+                    "condition": "replace",
+                    "columns": ["shipment_weight", "shipment_value", "shipment_distance_route"]
+                },
+                {
+                    "type": "one_hot_encoding",
+                    "condition": "append_and_remove",
+                    "columns": ["naics", "mode", "sctg"]
+                }
+            ]
+        },
+        {
+            "type": "model_trainer",
+            "properties": {
+                "objective": "best_model",
+                "random_state": 42,
+                "fold": 5,
+                "parameter_grid": {
+                    "type": "exhaustive"
+                },
+                "primary_metric": "mae",
+                "metrics": ["mae"]
+            },
+            "call": [
+                {
+                    "model_type": "random_forest_regressor",
+                    "hyperparameters": {
+                        "n_estimators": [300],
+                        "max_depth": [20],
+                        "min_samples_leaf": [5],
+                        "n_jobs": [-1],
+                        "random_state": [42]
+                    }
+                },
+                {
+                    "model_type": "gradient_boosting_regressor",
+                    "hyperparameters": {
+                        "n_estimators": [500],
+                        "learning_rate": [0.1],
+                        "max_depth": [7],
+                        "subsample": [0.8],
+                        "min_samples_leaf": [5],
+                        "random_state": [42]
+                    }
+                }
+            ]
+        },
+        {
+            "type": "post_test",
+            "properties": {
+                "path": "dataset",
+                "file": "cfs_2017",
+                "format": "csv",
+                "reference": "commodity_flow"
+            },
+            "call": [
+                {
+                    "intent": "measure_outcome_actual_value",
+                    "check_against": "random",
+                    "n_samples": 100000,
+                    "metrics": ["mae"],
+                    "seed": 42
+                }
+            ]
+        }
+    ]
+}
