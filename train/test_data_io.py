@@ -93,3 +93,128 @@ class TestDisk:
         assert loaded_data.shape == (2, 3)
         assert list(loaded_data.columns) == ["id", "name", "value"]
 
+
+class TestRowCounting:
+    """F-15: counting data rows without decoding the whole file."""
+
+    def _write(self, tmp_path, content, name="rows.csv"):
+        path = tmp_path / name
+        path.write_text(content)
+        return str(path)
+
+    def test_counts_excluding_header(self, tmp_path):
+        path = self._write(tmp_path, "h\n1\n2\n3\n")
+
+        assert Disk._count_data_rows(path) == 3
+
+    def test_counts_a_file_without_a_trailing_newline(self, tmp_path):
+        path = self._write(tmp_path, "h\n1\n2\n3")
+
+        assert Disk._count_data_rows(path) == 3
+
+    def test_header_only_file_has_no_data_rows(self, tmp_path):
+        path = self._write(tmp_path, "h\n")
+
+        assert Disk._count_data_rows(path) == 0
+
+    def test_agrees_with_pandas(self, tmp_path):
+        body = "\n".join(f"{i},{i * 2}" for i in range(500))
+        path = self._write(tmp_path, "id,val\n" + body + "\n")
+
+        assert Disk._count_data_rows(path) == len(pd.read_csv(path))
+
+
+class TestRandomRowSelection:
+    """F-15: skiprows as a predicate cost one Python call per row."""
+
+    def test_keeps_exactly_n_rows(self):
+        disk = Disk(None, FOLDER, FILENAME)
+
+        skip = disk.generate_skiprows(100, 10, random_state=42)
+        kept = set(range(1, 101)) - set(skip.tolist())
+
+        assert len(kept) == 10
+
+    def test_never_skips_the_header(self):
+        disk = Disk(None, FOLDER, FILENAME)
+
+        skip = disk.generate_skiprows(100, 10, random_state=42)
+
+        assert 0 not in skip
+
+    def test_is_deterministic_for_a_seed(self):
+        disk = Disk(None, FOLDER, FILENAME)
+
+        assert (disk.generate_skiprows(100, 10, 42) == disk.generate_skiprows(100, 10, 42)).all()
+
+    def test_varies_across_seeds(self):
+        disk = Disk(None, FOLDER, FILENAME)
+
+        assert not (disk.generate_skiprows(100, 10, 42) == disk.generate_skiprows(100, 10, 7)).all()
+
+    def test_all_rows_selected_means_nothing_is_skipped(self):
+        disk = Disk(None, FOLDER, FILENAME)
+
+        assert list(disk.generate_skiprows(10, 10, random_state=1)) == []
+
+    def test_requesting_more_rows_than_exist_raises(self):
+        disk = Disk(None, FOLDER, FILENAME)
+
+        with pytest.raises(ValueError, match="only has"):
+            disk.generate_skiprows(10, 11)
+
+    def test_end_to_end_sample_is_spread_across_the_file(self, tmp_path):
+        # The point of the loader is a random sample, not the first n rows.
+        body = "\n".join(f"{i},v{i},{i * 2}" for i in range(300))
+        path = tmp_path / "big.csv"
+        path.write_text("id,val,other\n" + body + "\n")
+
+        disk = Disk(None, str(tmp_path), "big")
+        disk.load_random_rows_via_csv(SampleEnum, {}, n_rows=30, random_state=1)
+        frame = disk.load_data()
+
+        assert frame.shape == (30, 3)
+        assert max(frame.iloc[:, 0]) > 150
+
+    def test_end_to_end_matches_a_direct_pandas_read(self, tmp_path):
+        body = "\n".join(f"{i},v{i},{i * 2}" for i in range(300))
+        path = tmp_path / "big2.csv"
+        path.write_text("id,val,other\n" + body + "\n")
+
+        disk = Disk(None, str(tmp_path), "big2")
+        disk.load_random_rows_via_csv(SampleEnum, {}, n_rows=30, random_state=7)
+        via_disk = disk.load_data()
+        via_pandas = pd.read_csv(path, skiprows=disk.generate_skiprows(300, 30, 7))
+
+        assert list(via_disk.iloc[:, 0]) == list(via_pandas.iloc[:, 0])
+
+    def test_does_not_overwrite_the_training_load_metrics(self, tmp_path):
+        # post_test runs on a run that already recorded its training load under
+        # size.load.*; reporting the post-test sample there would rewrite them.
+        class Facade:
+            def __init__(self):
+                self.calls = {}
+
+            def set_data_loading_time(self, ms):
+                self.calls["time"] = ms
+
+            def set_row_size(self, n):
+                self.calls["rows"] = n
+
+            def set_column_size(self, n):
+                self.calls["cols"] = n
+
+            def set_dataset_name(self, name):
+                self.calls["name"] = name
+
+        body = "\n".join(f"{i},v{i},{i * 2}" for i in range(50))
+        (tmp_path / "meta.csv").write_text("id,val,other\n" + body + "\n")
+        facade = Facade()
+
+        disk = Disk(facade, str(tmp_path), "meta")
+        disk.load_random_rows_via_csv(SampleEnum, {}, n_rows=5, random_state=1)
+        frame = disk.load_data()
+
+        assert frame.shape == (5, 3)
+        assert facade.calls == {}
+

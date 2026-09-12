@@ -40,27 +40,55 @@ class Disk:
         """
         def loader() -> pd.DataFrame:
             csv_path = f"{self.path}/{self.name}.csv"
-            # First, count the number of lines (excluding header)
-            with open(csv_path, 'r') as f:
-                total_lines = sum(1 for _ in f) - 1
+            total_lines = self._count_data_rows(csv_path)
             if n_rows > total_lines:
                 raise ValueError(f"Requested n_rows={n_rows} but file only has {total_lines} rows.")
-            skiprows = self.generate_skiprows_function(total_lines, n_rows, random_state)
+            skiprows = self.generate_skiprows(total_lines, n_rows, random_state)
             raw_data = pd.read_csv(csv_path, skiprows=skiprows, **load_options)
             raw_data = self._replace_columns(raw_data, column)
+            # Deliberately no write_metadata here: this loader runs during
+            # post_test on the same run that already recorded its training load
+            # via size.load.*, and reporting the post-test sample there would
+            # silently rewrite the training figures.
             return copy(raw_data)
         self.loader = loader
         return self
 
-    def generate_skiprows_function(self, total_lines: int, n_rows: int, random_state: int = None):
+    @staticmethod
+    def _count_data_rows(path: str) -> int:
+        """Count data rows (excluding the header) without decoding the file.
+
+        The previous implementation iterated the file line by line in Python,
+        which costs seconds on the 477 MB / 6M-row CFS file.
+        """
+        newlines = 0
+        last_byte = b""
+        with open(path, "rb") as fh:
+            while True:
+                block = fh.read(1 << 20)
+                if not block:
+                    break
+                newlines += block.count(b"\n")
+                last_byte = block[-1:]
+        if last_byte and last_byte != b"\n":
+            newlines += 1  # final line has no trailing newline
+        return max(newlines - 1, 0)  # the first line is the header
+
+    def generate_skiprows(self, total_lines: int, n_rows: int, random_state: int = None):
+        """Row indices to skip so that exactly `n_rows` data rows survive.
+
+        Returns an array rather than a predicate. Pandas calls a callable once
+        per row -- about 6M Python calls here -- whereas a list-like is handled
+        inside its C parser.
+        """
         if n_rows > total_lines:
             raise ValueError(f"Requested n_rows={n_rows} but file only has {total_lines} rows.")
         rng = np.random.default_rng(random_state)
-        chosen = set(rng.choice(total_lines, n_rows, replace=False) + 1)
-        skip = set(range(1, total_lines + 1)) - chosen
-        def skiprows(i):
-            return i in skip and i != 0
-        return skiprows
+        chosen = rng.choice(total_lines, n_rows, replace=False) + 1  # +1 skips the header
+        keep = np.zeros(total_lines + 1, dtype=bool)
+        keep[0] = True  # row 0 is the header and is never skipped
+        keep[chosen] = True
+        return np.flatnonzero(~keep)
 
 
     def write_metadata(self, raw_data, time_ms):
@@ -149,14 +177,28 @@ class Disk:
             raise ValueError(f"Cannot replace columns: enum {len(enum)} df {len(data.columns)}")
         return data
 
+    SUPPORTED_FORMATS = ("csv",)
+    SUPPORTED_CALLS = ("load",)
+
     @classmethod
     def parse_instruction(cls, properties: dict, call: List[dict], facade):
-        # ignore the properties
+        fmt = properties.get("format", "csv")
+        if fmt not in cls.SUPPORTED_FORMATS:
+            # `format` was read by every config and then ignored; only CSV
+            # loading is implemented.
+            raise ValueError(
+                f"data_io format {fmt!r} is not supported; "
+                f"implemented: {list(cls.SUPPORTED_FORMATS)}"
+            )
         c = cls(facade, properties.get("path"), properties.get("file"))
         c.column = TabularColumn.from_string(properties.get("reference"))
         for step in call:
-            if step["type"] == "load":
-                c.load_dataframe_via_csv(c.column, {"nrows": step.get("n_rows", None)})
+            if step["type"] not in cls.SUPPORTED_CALLS:
+                raise ValueError(
+                    f"Unknown data_io step {step['type']!r}; "
+                    f"implemented: {list(cls.SUPPORTED_CALLS)}"
+                )
+            c.load_dataframe_via_csv(c.column, {"nrows": step.get("n_rows", None)})
         return c
         
     def execute(self, input_data):
