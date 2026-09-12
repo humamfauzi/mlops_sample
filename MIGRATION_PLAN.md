@@ -17,7 +17,7 @@
 | 4 — Unify configuration | ✅ done | `da2bb54` |
 | 5 — Retire the legacy stack | ✅ done | `a8b047b` |
 | 6 — Close the deployment loop | ✅ done | `deploy/` + README rewrite |
-| 7 — Harden the registry | ✅ done except F-09 (deferred for discussion) | *(this phase)* |
+| 7 — Harden the registry | ✅ done | *(this phase)* |
 
 ### Phase 7 progress
 
@@ -27,7 +27,7 @@
 | **F-06** | ✅ fixed | `ORDER BY m.value ASC, r.id ASC LIMIT 1` in `select_previously_published`. Latent: every published run currently has exactly one test-scored child. |
 | **F-07** | ✅ fixed | Model lookup scoped to the parent run; run-ID generation retries on collision; also corrected the alphabet literal (`12345678890` had a duplicated `8` and no `0`). Latent: 91 runs, 91 distinct names. |
 | **F-08** | ✅ fixed | `IS_EXPORT` / `IS_TEMPERATURE_CONTROLLED` classified as categorical, and `_save_manifest` now raises on any column it cannot account for. Also required adding the missing `primary_id()` to `SampleEnumTransformer`. |
-| **F-09** | ⏸ deferred | Version `example.db` under DVC — needs a discussion about registry size and retention first. |
+| **F-09** | ✅ resolved | Decided **against** DVC. DVC has no block-level delta — it addresses whole files by content hash — so appending a few kilobytes of metrics to an 874 MiB registry would re-upload all 874 MiB (verified: a one-byte change yields an unrelated hash, and the repo's own cache object is the entire 477 MB CSV). Instead: registry pruned **874 MiB → 54 MiB**, `scripts/registry.py` added for consistent `VACUUM INTO` snapshots, integrity/serving verification and pruning, and backups delegated to a block-deduplicating tool (restic/borg). |
 | **F-14** | ✅ fixed | `parameter_grid: "random"`, `objective: "fast_model"`, unknown model types, non-CSV `data_io` formats, unknown `data_io` steps and OHE conditions other than `append_and_remove` now raise. All 10 shipped configs already use supported values. |
 | **F-15** | ✅ fixed | `load_random_rows_via_csv` no longer scans the file to count lines or passes a per-row Python predicate to `skiprows`; it uses a set-based skiprows and records its own loading time. |
 | **F-16** | ✅ fixed | `validate()` predicted once per metric *and* per stage — up to six full predictions for a three-metric request — and discarded an initial prediction outright. It now predicts once per split, and validation timing covers the whole stage. |

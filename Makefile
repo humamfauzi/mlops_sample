@@ -7,10 +7,13 @@ endif
 
 PORT ?= 8000
 PYTHON ?= uv run python
+DB ?= example.db
+SNAPSHOT ?= .registry/snapshot-$(shell date +%Y%m%d-%H%M%S).db
 
 .PHONY: test train train-all serve list-models health manual-hit \
         build-binaries build-train-module build-server-module \
-        smoke-test smoke-fixture deploy clean clean-exe tags register-dvc-remote
+        smoke-test smoke-fixture deploy clean clean-exe tags register-dvc-remote \
+        registry-report registry-verify registry-snapshot registry-prune
 
 # --------------------------------------------------------------------- tests
 test:
@@ -82,6 +85,25 @@ smoke-fixture:
 # install the server binary as a systemd service (see deploy/README.md)
 deploy:
 	sudo ./deploy/install.sh
+
+# ------------------------------------------------------- registry maintenance
+# example.db holds every run and every model. These live in scripts/registry.py;
+# see "Backing up the registry" in README.md for why it is not tracked by DVC.
+registry-report:
+	uv run python scripts/registry.py report $(DB)
+
+registry-verify:
+	uv run python scripts/registry.py verify $(DB)
+
+# Consistent copy via VACUUM INTO -- safe to run while the server is up.
+# Snapshot from the serving host before shipping a registry anywhere.
+registry-snapshot:
+	uv run python scripts/registry.py snapshot $(DB) $(SNAPSHOT)
+
+# Drop model pickles nothing can load. Writes to SNAPSHOT and leaves DB alone;
+# add DRY_RUN=1 to only report.
+registry-prune:
+	uv run python scripts/registry.py prune $(DB) $(SNAPSHOT) $(if $(DRY_RUN),--dry-run,) --force
 
 # --------------------------------------------------------------------- misc
 register-dvc-remote:

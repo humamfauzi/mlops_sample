@@ -247,6 +247,68 @@ differs from the pipeline's.
 
 ---
 
+## Backing up the registry
+
+`example.db` is a single **mutable** file, which makes it a poor fit for DVC.
+
+DVC addresses whole files by content hash. It has no block-level delta, so every
+change produces a new object of the *entire* file:
+
+```
+dataset/cfs_2017.csv.dvc  →  md5 1242d048…   size 499959411
+.dvc/cache/files/md5/12/42d048…    →  499,959,411 bytes   (the whole file)
+```
+
+Appending a few kilobytes of metrics to an 874 MiB registry changes its hash and
+re-uploads all 874 MiB. Ten training runs would put ~8.5 GiB in S3; a hundred,
+~85 GiB. The dataset is immutable and DVC handles it well — the registry is not.
+
+**Use a block-level, deduplicating backup tool instead** (restic, borg). Those
+compare content block by block, and appending to a SQLite file dirties only its
+tail pages, so incrementals are close to free.
+
+```bash
+restic -r s3:s3.amazonaws.com/your-bucket init
+restic -r s3:s3.amazonaws.com/your-bucket backup example.db
+```
+
+### Snapshots must be consistent
+
+Never `cp` a live `example.db`. A file copy can capture a torn write and produce
+a silently corrupt database. Use `VACUUM INTO`, which takes a transactionally
+consistent copy **while the server is running**:
+
+```bash
+make registry-verify                       # integrity + serving invariant
+make registry-snapshot                     # → .registry/snapshot-<timestamp>.db
+make registry-report                       # size and composition
+```
+
+Back up the *snapshot*, not the live file.
+
+### Keeping it small
+
+A model blob is only loadable through its child run's `level=best` tag — that is
+the only path the server and `post_test` use. Every other child's pickle is dead
+weight, and it is what makes the registry large:
+
+| | |
+|---|---|
+| before | **874 MiB** — one `inferior` RandomForest accounted for 753 MiB of it |
+| after `make registry-prune` | **54 MiB** |
+
+```bash
+DRY_RUN=1 make registry-prune     # report only
+make registry-prune               # writes a new file; never edits the original
+```
+
+The pruned copy is verified before it is offered: if any published model would
+stop being loadable, the command reports failure and leaves the source alone.
+Models from runs that produced no best child at all are kept by default, since
+those are the only record of what an incomplete run trained.
+
+---
+
 ## Testing
 
 ```bash
@@ -295,7 +357,7 @@ repositories/     storage facade + sqlite/disk/noop backends
 column/           column schemas (the positional contract with the CSV)
 config/           runtime.json - shared repository settings
 train_config/     10 declarative experiment definitions
-scripts/          fixture builder + artifact smoke test
+scripts/          fixture builder, artifact smoke test, registry maintenance
 tools/            build provenance stamping
 deploy/           systemd unit, installer, runbook
 ```
@@ -315,6 +377,10 @@ deploy/           systemd unit, installer, runbook
   global uniqueness.
 - **`pgdata/`** is a leftover from the Postgres era, owned by `nobody` with mode
   `700`. Safe to remove with `sudo rm -rf pgdata`.
+- **The registry is not version-controlled.** It is a large mutable SQLite file,
+  which DVC handles badly (see *Backing up the registry*). Snapshot it with
+  `make registry-snapshot` and back those snapshots up with a deduplicating
+  tool.
 
 `REPOSITORY_MAP.md` is a full architectural analysis with a severity-ranked
 findings register; `MIGRATION_PLAN.md` tracks the migration from the earlier

@@ -194,3 +194,6 @@ dist_build_test/
 
 # local test/smoke fixture
 .smoke/
+
+# registry snapshots and pruned copies (the registry itself is *.db, above)
+.registry/

@@ -103,6 +103,49 @@ sudo systemctl start mlops-server
 Note that a binary and a registry are only interchangeable if the binary
 understands the registry's schema. `GET /health` tells you what you are running.
 
+## Backing up and moving the registry
+
+The registry is a single **mutable** file, so it is not tracked by DVC — DVC
+addresses whole files by content hash and would re-upload all of it on every
+change. Use a block-level deduplicating tool (restic, borg) against snapshots
+instead. See *Backing up the registry* in the top-level `README.md`.
+
+Never copy the live file with `cp`: a copy taken during a write can be silently
+corrupt. Take a consistent snapshot instead — safe while the service runs,
+because it uses SQLite's `VACUUM INTO`:
+
+```bash
+make registry-verify       # integrity + "every published model is loadable"
+make registry-snapshot     # -> .registry/snapshot-<timestamp>.db
+```
+
+To move a registry to this host:
+
+```bash
+# on the source host
+make registry-verify && make registry-snapshot
+scp .registry/snapshot-*.db thishost:/tmp/incoming.db
+
+# on this host
+sudo systemctl stop mlops-server
+sudo install -o mlops -g mlops -m 640 /tmp/incoming.db /opt/mlops/data/example.db
+sudo systemctl start mlops-server
+curl -s localhost:8000/health | python3 -m json.tool
+```
+
+Keep the previous registry until `/health` reports the expected model count.
+
+The registry grows with every trained model. Prune it before shipping:
+
+```bash
+DRY_RUN=1 make registry-prune     # report what would go
+make registry-prune               # writes a new, verified file
+```
+
+This drops model pickles nothing can load — only a child run tagged
+`level=best` is ever read — and refuses to emit a registry that would break
+serving. It never edits the original.
+
 ## Retraining
 
 Training and serving share one configuration file and one registry, but not
