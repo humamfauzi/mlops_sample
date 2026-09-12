@@ -365,7 +365,7 @@ stage, not the ~5 lines I claimed.
 
 | # | Item | Rationale | Status |
 |---|---|---|---|
-| D1 | **Keep log-space for promotion.** | It is stable and low-variance, which is what model *selection* needs. | ✅ keep current behaviour |
+| D1 | ~~**Keep log-space for promotion.**~~ **Now: select on `VWLE`.** | Log-space was kept because dollar MAE is far too noisy to select on (40% spread). But `SKEW_EXPERIMENTS.md` §7.3 shows the two orderings are *inverted* on identical rows -- the best log-MAE model was the worst by dollars, and nomination published it. `VWLE` is stable (1-2% spread) and ranks them correctly, so the reason to keep the proxy no longer holds. | 🔴 **revisit** |
 | D2 | **Report dollar MAE as a range, never a point.** `scripts/post_test_benchmark.py --seeds` runs several draws and prints min/median/max, and warns when a single draw is being read as a measurement. | A single draw is ±40%. A difference under ~$2,000 is not real. | ✅ built |
 | D3 | **Never compare across populations.** One intent = one evaluation set. | Done in A2. | ✅ done |
 | D4 | **Attack the misalignment in the objective, not the promotion metric.** If dollars matter, the loss should reflect them — value-weighted loss, or `loss="absolute_error"` (already available). | The gap is that squared-error-on-log is not dollar error. Changing what the model optimises is the honest lever. | ⬜ Phase C |

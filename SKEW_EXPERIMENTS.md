@@ -151,7 +151,7 @@ any shipment away.
 
 Ordered by expected value per unit of cost. E1–E2 are cheap; E3–E4 need code.
 
-### E1 — Loss function sweep
+### E1 — Loss function sweep  ✅ **RUN — see §7.2**
 **No code change.** `loss` is an ordinary hyperparameter of both GBMs.
 
 ```json
@@ -233,7 +233,7 @@ each stage specialise.
 *Risk:* the tail is only ~5,000 rows above $1M, so stage 2 has little data. Cap
 expectations.
 
-### E5 — Trimmed training population
+### E5 — Trimmed training population  ❌ **REFUTED — see §7.1**
 **No code change, but a confound to manage.**
 
 ```json
@@ -322,3 +322,109 @@ The decile table is the one from §1.2, reproduced by the tool — decile 0 is
 watch when E1 and E2 report.** A scalar improvement that leaves those ratios
 where they are has not addressed the skew.
 
+
+---
+
+## 7. Results — E1 and E5 run
+
+Five configs, all `post_test_log_gboosting`-style all-modes, HGB, 1M rows loaded,
+**all scored on the full population** (`population: "all"`), 100k rows, seed 42.
+
+| run | loss | training trim | rows trained | log test MAE | dollar MAE | **VWLE** | decile-9 ratio |
+|---|---|---|---|---|---|---|---|
+| 92 | `squared_error` | none | 800,000 | 0.8520 | $10,095 | **1.2969** | **0.36** |
+| 94 | `absolute_error` | none | 800,000 | 0.8480 | $11,169 | 1.3183 | 0.31 |
+| 96 | `squared_error` | > $1M (0.086%) | 799,312 | 0.8490 | $11,427 | 1.3943 | 0.26 |
+| 98 | `absolute_error` | > $1M | 799,312 | 0.8440 | $11,353 | 1.3944 | 0.27 |
+| **100** | `squared_error` | **> $100k (1.7%)** | 786,533 | **0.8410** | $11,978 | **1.7725** | **0.18** |
+
+VWLE spread across seeds is 1–2%, so a 7% gap is real. Ranked best to worst by
+VWLE: **92, 94, 96, 98, 100** — the exact reverse of the log-space order.
+
+### 7.1 Removing the tail makes the model worse, not better
+
+**E5 is refuted.** Trimming is monotonically harmful, and the mechanism is
+visible in the calibration table. Decile ratios (predicted ÷ actual):
+
+| run | training trim | decile 8 | **decile 9** |
+|---|---|---|---|
+| 92 | none | 0.97 | **0.36** |
+| 96 | > $1M | 0.96 | **0.26** |
+| 100 | > $100k | **0.87** | **0.18** |
+
+The intuition was that the model is forced to compromise between a $4 shipment
+and a $3.5bn one, and that removing the tail frees it to fit the bulk. **The
+opposite happens.** Removing the tail teaches the model that the tail does not
+exist, so it under-predicts extreme values *harder* — decile 9 goes from 2.8×
+under to 5.6× under.
+
+Worse, the damage **propagates downward**. At a $100k trim, decile 8 — which was
+well calibrated at 0.97 — falls to 0.87. The model now believes nothing above
+~$100k exists, so it compresses everything near that ceiling.
+
+And decile 9's own log MAE got *worse* (0.966 → 1.135) while the **overall** test
+MAE improved (0.8520 → 0.8410). The model got better on the bulk and much worse
+on the tail, and the log-space average mostly measures the bulk.
+
+*Ablation note:* the $1M trim removes only **688 of 800,000 rows**. That 0.086%
+still moves VWLE by 7%.
+
+### 7.2 `absolute_error` shrinks the tail *more* than `squared_error`
+
+| loss | decile-9 ratio (untrimmed) |
+|---|---|
+| `squared_error` | **0.36** |
+| `absolute_error` | 0.31 |
+
+This contradicts the §3/E1 hypothesis. `absolute_error` fits the conditional
+**median**, and for a right-skewed conditional distribution the median sits well
+below the mean — so it hedges the upper tail *harder*, not less.
+
+It is a genuine trade-off, not a win for either:
+
+- `absolute_error` wins on **log MAE** (0.8480 vs 0.8520) — it optimises exactly
+  the thing that metric averages
+- `squared_error` wins on **tail calibration and VWLE** (1.2969 vs 1.3183)
+
+Since the business number depends on the tail, `squared_error` is the better
+base — which is not what either of us expected.
+
+### 7.3 The proxy picked the worst model — on the same population
+
+This is the clean demonstration that was missing before. All five runs are the
+same feature set, the same trainer, and **scored on identical rows**. Only the
+loss and the training trim differ.
+
+```
+log-space test MAE   :  100 (0.8410)  <  98 (0.8440)  <  94 (0.8480)  <  96 (0.8490)  <  92 (0.8520)
+value-weighted log MAE:  92 (1.2969)  <  94 (1.3183)  <  96 (1.3943)  <  98 (1.3944)  <  100 (1.7725)
+```
+
+**The orderings are almost exactly inverted.** The model with the best log-space
+score is the worst by the dollar-aligned metric, and vice versa.
+
+Nomination followed the proxy and **published run 100** — best log MAE, worst
+dollar error, worst tail calibration.
+
+Earlier I withdrew the claim that the promotion metric was the problem, because
+the only example I had (run 76 vs 81) was a *population* confound. This is not:
+same population, same sample, same code path. The proxy genuinely selects the
+wrong model, and here it is measurable rather than inferred.
+
+`EXPERIMENT_PLAN.md`'s D1 ("keep log-space for promotion") needs revisiting in
+light of this. The reason to keep it was that dollar MAE is too noisy to select
+on — but VWLE is **not** noisy (1–2% spread), and it is the metric that ranks
+these correctly. **D1 should become "select on VWLE, report log MAE".**
+
+### 7.4 What this implies for the remaining experiments
+
+- **E5 (trimmed training) — drop it.** Refuted, with mechanism.
+- **E2 (value-weighted training) — promote to first.** Trimming *down*-weights
+  the tail and makes things worse; E2 *up*-weights it, which is the same lever
+  pushed the other way. That is now the best-evidenced bet in the plan.
+- **E1 (loss sweep)** — done for the two main losses. `quantile` at a high
+  quantile is still untested and is the natural next probe, since it targets the
+  tail directly rather than the centre.
+- **E3 (unit-value reparametrisation)** — unchanged, still worth testing.
+- **E6/C1 (capacity, features)** — unchanged. Note all five runs here are still
+  underfit in log space; capacity is untested at this scale with HGB.

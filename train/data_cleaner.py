@@ -28,19 +28,52 @@ class Cleaner(TabularDataCleaner):
     providing a way to accumulate and manage a series of actions to be performed later as a single unit.
     """
 
+    # Queued operations fall into three kinds, and the distinction matters at
+    # evaluation time:
+    #   POPULATION - filter_rows: defines which rows are in scope. A run trained
+    #                on a segment or with outliers removed still needs to be
+    #                *scored* on the whole population to be comparable.
+    #   HYGIENE    - drop_na: keeps the frame usable. Always applied.
+    #   COLUMNS    - selects and shapes columns. Always applied.
+    POPULATION = "population"
+    HYGIENE = "hygiene"
+    COLUMNS = "columns"
+
     def __init__(self, facade):
         self.cleaned_data: Optional[pd.DataFrame] = None
         self.call_container = []
         self.facade = facade
 
-    def clean_data(self, df: pd.DataFrame) -> pd.DataFrame:
+    def _queue(self, kind: str, call):
+        self.call_container.append((kind, call))
+        return self
+
+    def clean_data(
+        self,
+        df: pd.DataFrame,
+        apply_population_filters: bool = True,
+        record_metadata: bool = True,
+    ) -> pd.DataFrame:
+        """Run the queued operations.
+
+        `apply_population_filters=False` skips the `filter_rows` operations but
+        keeps column selection and hygiene, which is how post_test scores a
+        trimmed or segment-trained model on the full population.
+
+        `record_metadata=False` stops the call writing `time_ms.cleaning` and
+        `size.clean.*` onto the run. post_test reuses the run's cleaner, so
+        without this the evaluation pass overwrites the training pass's figures.
+        """
         start = time.time()
         self.cleaned_data = df.copy()
-        for call in self.call_container:
+        for kind, call in self.call_container:
+            if kind == self.POPULATION and not apply_population_filters:
+                continue
             call()
         self.reparse_data_type()
         time_ms = int((time.time() - start) * 1000)
-        self.write_metadata(time_ms)
+        if record_metadata:
+            self.write_metadata(time_ms)
         return copy(self.cleaned_data)
 
     def reparse_data_type(self):
@@ -65,21 +98,16 @@ class Cleaner(TabularDataCleaner):
         return self
 
     def remove_columns(self, columns):
-        self.call_container.append(
-            lambda: self.cleaned_data.drop(columns, axis=1, inplace=True)
-        )
-        return self
+        return self._queue(self.COLUMNS, lambda: self.cleaned_data.drop(columns, axis=1, inplace=True))
 
     def filter_columns(self, columns):
         def filter_columns():
             self.cleaned_data = self.cleaned_data[columns]
 
-        self.call_container.append(filter_columns)
-        return self
+        return self._queue(self.COLUMNS, filter_columns)
 
     def remove_nan_rows(self):
-        self.call_container.append(lambda: self.cleaned_data.dropna(inplace=True))
-        return self
+        return self._queue(self.HYGIENE, lambda: self.cleaned_data.dropna(inplace=True))
 
     def filter_rows(self, column: str, operator: str, values: list):
         """
@@ -143,7 +171,7 @@ class Cleaner(TabularDataCleaner):
                 mask = col <= values[0]
             self.cleaned_data = self.cleaned_data[mask].reset_index(drop=True)
 
-        self.call_container.append(_apply)
+        self._queue(self.POPULATION, _apply)
         return self
 
     @classmethod

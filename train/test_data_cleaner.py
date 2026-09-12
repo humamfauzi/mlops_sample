@@ -238,3 +238,73 @@ class TestFilterRows:
         config_call = [{"type": "drop_na"}]
         ddf = Cleaner.parse_instruction({"reference": "sample"}, config_call, None)
         assert len(ddf.call_container) == 1
+
+
+class TestOperationKinds:
+    """Queued operations are tagged, so a scorer can skip population filters.
+
+    `filter_rows` decides which rows are in scope; `drop_na` keeps the frame
+    usable; column selection shapes it. Only the first should be skippable when
+    re-scoring a trimmed model on the full population.
+    """
+
+    def _cleaner(self):
+        cleaner = Cleaner(None)
+        cleaner.column = SampleEnum
+        return cleaner
+
+    def test_filter_rows_is_a_population_filter(self):
+        c = self._cleaner()
+        c.filter_rows(SampleEnum.COLUMN_FEATURE.name, "eq", ["a"])
+
+        assert c.call_container[0][0] == Cleaner.POPULATION
+
+    def test_drop_na_is_hygiene(self):
+        c = self._cleaner()
+        c.remove_nan_rows()
+
+        assert c.call_container[0][0] == Cleaner.HYGIENE
+
+    def test_column_operations_are_neither(self):
+        c = self._cleaner()
+        c.filter_columns([SampleEnum.COLUMN_FEATURE.name])
+        c.remove_columns([SampleEnum.COLUMN_FEATURE.name])
+
+        assert [kind for kind, _ in c.call_container] == [Cleaner.COLUMNS] * 2
+
+    def test_skipping_population_filters_keeps_hygiene_and_columns(self, df_numeric):
+        c = self._cleaner()
+        c.filter_columns([SampleEnum.COLUMN_FEATURE, SampleEnum.COLUMN_TARGET])
+        c.filter_rows(SampleEnum.COLUMN_TARGET.name, "gt", [1000])   # matches nothing
+        c.remove_nan_rows()
+
+        with_filters = c.clean_data(df_numeric)
+        without = c.clean_data(df_numeric, apply_population_filters=False)
+
+        assert len(with_filters) == 0                    # filter_rows applied
+        assert len(without) == len(df_numeric)           # skipped
+        assert list(without.columns) == [SampleEnum.COLUMN_FEATURE,
+                                         SampleEnum.COLUMN_TARGET]
+
+    def test_record_metadata_false_writes_nothing(self, df_numeric):
+        class Facade:
+            def __init__(self):
+                self.calls = []
+
+            def set_data_cleaning_time(self, ms):
+                self.calls.append("time")
+
+            def set_row_size_after_cleaning(self, n):
+                self.calls.append("rows")
+
+            def set_column_size_after_cleaning(self, n):
+                self.calls.append("cols")
+
+        c = self._cleaner()
+        c.facade = Facade()
+
+        c.clean_data(df_numeric, record_metadata=False)
+        assert c.facade.calls == []
+
+        c.clean_data(df_numeric, record_metadata=True)
+        assert c.facade.calls == ["time", "rows", "cols"]

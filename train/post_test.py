@@ -116,18 +116,29 @@ class Inference:
 
 
 class PostTest:
+    # Which rows the score is computed over.
+    #   "training" - reuse the training cleaner's row filters, so a segment or
+    #                trimmed model is scored on its own population
+    #   "all"      - skip those filters and score on everything, so models
+    #                trained on different populations are still comparable
+    TRAINING_POPULATION = "training"
+    ALL_POPULATION = "all"
+    _POPULATIONS = (TRAINING_POPULATION, ALL_POPULATION)
+
     # TODO: should support multiple cleaner
     def __init__(self, 
         configs: List[Config], 
         facade: Facade, 
         loader: Disk, 
         cleaner: Cleaner, 
-        column_reference: TabularColumn):
+        column_reference: TabularColumn,
+        population: str = TRAINING_POPULATION):
         self.facade = facade
         self.loader = loader
         self.configs = configs
         self.cleaner = cleaner
         self.column = column_reference
+        self.population = population
         pass
 
     @classmethod
@@ -150,6 +161,13 @@ class PostTest:
         if not configs:
             raise ValueError("post_test requires at least one entry in its call list")
 
+        population = properties.get("population", cls.TRAINING_POPULATION)
+        if population not in cls._POPULATIONS:
+            raise ValueError(
+                f"post_test population {population!r} is not supported; "
+                f"expected one of {list(cls._POPULATIONS)}"
+            )
+
         column = TabularColumn.from_string(properties.get("reference"))
         loader = Disk(facade, properties.get("path", ""), properties.get("file", ""))
         return cls(
@@ -157,7 +175,8 @@ class PostTest:
             facade=facade,
             loader=loader,
             cleaner=cleaner,
-            column_reference=column
+            column_reference=column,
+            population=population,
         )
 
     def reconstruct_inference(self, run_id: str):
@@ -220,7 +239,14 @@ class PostTest:
             random_state=seed,
             load_options={},
         )
-        return self.cleaner.execute(self.loader.execute(None))
+        # record_metadata=False: this is a scoring pass over the run's own
+        # cleaner, and writing time_ms.cleaning / size.clean.* here would
+        # overwrite the figures the training pass just recorded.
+        return self.cleaner.clean_data(
+            self.loader.execute(None),
+            apply_population_filters=(self.population == self.TRAINING_POPULATION),
+            record_metadata=False,
+        )
 
     def predict(self, inference: Inference, samples: pd.DataFrame) -> np.ndarray:
         """Replay the stored transformation pipeline and predict, in dollars.

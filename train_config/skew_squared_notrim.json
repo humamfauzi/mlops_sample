@@ -1,0 +1,139 @@
+{
+    "name": "skew_experiment",
+    "description": "HGB, loss=squared_error, trained on the full value range. Evaluated on the FULL population (post_test population=all) so trimmed and untrimmed models are graded on identical rows.",
+    "instructions": [
+        {
+            "type": "data_io",
+            "properties": {
+                "path": "dataset",
+                "file": "cfs_2017",
+                "format": "csv",
+                "reference": "commodity_flow"
+            },
+            "call": [
+                {
+                    "type": "load",
+                    "n_rows": 1000000
+                }
+            ]
+        },
+        {
+            "type": "data_cleaner",
+            "properties": {
+                "type": "lazy_call",
+                "reference": "commodity_flow"
+            },
+            "call": [
+                {
+                    "type": "filter_columns",
+                    "columns": [
+                        "shipment_weight",
+                        "shipment_value",
+                        "shipment_distance_route",
+                        "naics",
+                        "mode",
+                        "sctg"
+                    ]
+                },
+                {
+                    "type": "drop_na"
+                }
+            ]
+        },
+        {
+            "type": "data_transformer",
+            "properties": {
+                "type": "lazy_call",
+                "reference": "commodity_flow"
+            },
+            "call": [
+                {
+                    "type": "log_transformation",
+                    "condition": "replace",
+                    "columns": [
+                        "shipment_weight",
+                        "shipment_value",
+                        "shipment_distance_route"
+                    ]
+                },
+                {
+                    "type": "one_hot_encoding",
+                    "condition": "append_and_remove",
+                    "columns": [
+                        "naics",
+                        "mode",
+                        "sctg"
+                    ]
+                }
+            ]
+        },
+        {
+            "type": "model_trainer",
+            "properties": {
+                "objective": "best_model",
+                "random_state": 42,
+                "fold": 5,
+                "parameter_grid": {
+                    "type": "exhaustive"
+                },
+                "primary_metric": "mae",
+                "metrics": [
+                    "mae"
+                ]
+            },
+            "call": [
+                {
+                    "model_type": "hist_gradient_boosting_regressor",
+                    "hyperparameters": {
+                        "loss": [
+                            "squared_error"
+                        ],
+                        "max_iter": [
+                            500
+                        ],
+                        "learning_rate": [
+                            0.1
+                        ],
+                        "max_leaf_nodes": [
+                            63
+                        ],
+                        "min_samples_leaf": [
+                            20
+                        ],
+                        "early_stopping": [
+                            true
+                        ],
+                        "n_iter_no_change": [
+                            20
+                        ],
+                        "random_state": [
+                            42
+                        ]
+                    }
+                }
+            ]
+        },
+        {
+            "type": "post_test",
+            "properties": {
+                "path": "dataset",
+                "file": "cfs_2017",
+                "format": "csv",
+                "reference": "commodity_flow",
+                "population": "all"
+            },
+            "call": [
+                {
+                    "intent": "measure_outcome_actual_value",
+                    "check_against": "random",
+                    "n_samples": 100000,
+                    "seed": 42,
+                    "metrics": [
+                        "mae",
+                        "value_weighted_log_mae"
+                    ]
+                }
+            ]
+        }
+    ]
+}

@@ -42,7 +42,20 @@ class RecordingLoader:
 
 
 class PassthroughCleaner:
+    """Stands in for Cleaner; records how it was asked to clean."""
+
+    def __init__(self):
+        self.calls = []
+
     def execute(self, frame):
+        self.calls.append({"apply_population_filters": True, "record_metadata": True})
+        return frame
+
+    def clean_data(self, frame, apply_population_filters=True, record_metadata=True):
+        self.calls.append({
+            "apply_population_filters": apply_population_filters,
+            "record_metadata": record_metadata,
+        })
         return frame
 
 
@@ -261,3 +274,62 @@ class TestCalibrationByDecile:
 
         for r in rows:
             assert 0.8 < r["ratio"] < 1.25
+
+
+def build(call, properties=None):
+    """A PostTest with a recording cleaner and loader, for population tests."""
+    props = {"reference": "sample_enum_transformer", "path": "dataset", "file": "cfs_2017"}
+    props.update(properties or {})
+    cleaner = PassthroughCleaner()
+    pt = PostTest.parse_instruction(props, call, cleaner, None)
+    pt.loader = RecordingLoader()
+    return pt, cleaner
+
+
+class TestEvaluationPopulation:
+    """Scoring population is decoupled from the training population.
+
+    A model trained with outliers or whole segments removed still has to be
+    *scored* on the full population, or a trimmed model can never be compared
+    with an untrimmed one. Before this, post_test reused the training cleaner's
+    row filters, so trimming the training data silently trimmed the score too --
+    the model would look better precisely because it was graded on the easy rows
+    it had been allowed to ignore.
+    """
+
+    CALL = [{"n_samples": 100, "metrics": ["mae"], "seed": 1}]
+
+    def test_defaults_to_the_training_population(self):
+        pt, _ = build(self.CALL)
+
+        assert pt.population == PostTest.TRAINING_POPULATION
+
+    def test_training_population_applies_row_filters(self):
+        pt, cleaner = build(self.CALL, {"population": "training"})
+
+        pt.pick_random_samples()
+
+        assert cleaner.calls == [
+            {"apply_population_filters": True, "record_metadata": False}
+        ]
+
+    def test_all_population_skips_row_filters(self):
+        pt, cleaner = build(self.CALL, {"population": "all"})
+
+        pt.pick_random_samples()
+
+        assert cleaner.calls == [
+            {"apply_population_filters": False, "record_metadata": False}
+        ]
+
+    def test_evaluation_never_records_training_metadata(self):
+        # post_test reuses the run's cleaner, so recording here would overwrite
+        # the time_ms.cleaning and size.clean.* figures from the training pass.
+        for population in ("training", "all"):
+            pt, cleaner = build(self.CALL, {"population": population})
+            pt.pick_random_samples()
+            assert cleaner.calls[0]["record_metadata"] is False
+
+    def test_unknown_population_is_rejected(self):
+        with pytest.raises(ValueError, match="population"):
+            build(self.CALL, {"population": "everything"})
