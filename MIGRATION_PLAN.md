@@ -14,8 +14,8 @@
 | 1 — Make the tree honest | ✅ done | `70a8d0e` |
 | 2 — Repair the build path | ✅ done | `a276673`, `8e76120` |
 | 3 — Verify the artifact | ✅ done | `19cc6f4` |
-| 4 — Unify configuration | ✅ done | *(this phase)* |
-| 5 — Retire the legacy stack | ✅ done | *(this phase)* |
+| 4 — Unify configuration | ✅ done | `da2bb54` |
+| 5 — Retire the legacy stack | ✅ done | `a8b047b` |
 | 6 — Close the deployment loop | ⬜ not started — target decided: installed binary, no containers | |
 | 7 — Harden the registry | ⬜ not started | |
 
