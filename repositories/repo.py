@@ -1,35 +1,11 @@
 import math
 from random import random
-from xml.parsers.expat import model
 from repositories.sqlite import SQLiteRepository, ObjectStorage as SQLiteObjectStorage
 from repositories.struct import TransformationInstruction, TransformationObject, ModelObject
-from repositories.s3 import S3
 from repositories.disk import Disk
 import repositories.noop as noop
 from dataclasses import dataclass
-from typing import List
-from typing import Union, List
-
-# TODO: This data class should be somewhere that accessible for both server, repository, and train
-@dataclass
-class InferenceModelInstruction:
-    id: str # it is a 6 random string of all caps
-
-@dataclass
-class Transformation:
-    id: str
-
-@dataclass
-class InferenceTransformationInstruction:
-    # available column used for parsing from query string to
-    # data transformation input
-    available_column: List[str] # deprecated, in favor of allowed columns
-    steps: List[Transformation]
-
-@dataclass
-class InferenceInstruction:
-    model: InferenceModelInstruction
-    transformation: InferenceTransformationInstruction
+from typing import List, Union
 
 @dataclass
 class NumericalAttributes:
@@ -56,32 +32,38 @@ class AllowedColumn:
         base.update(self.attributes.to_dict())
         return base
 
+# Backends available to both runtimes. `noop` is a silent null store used by the
+# test suite; `sqlite` is the deployed default (registry and artifacts in one
+# file); `disk` exists for local debugging of the training pipeline.
+_REPOSITORY_BACKENDS = {"sqlite": SQLiteRepository}
+_OBJECT_BACKENDS = {"sqlite": SQLiteObjectStorage, "disk": Disk}
+
 class Facade:
     @classmethod
     def parse_instruction(cls, config: dict):
         if len(config) == 0:
             print("No configuration provided, using default noop repositories.")
             return cls("sample", noop.Repository(), noop.Object())
-        repository = config.get("data", None)
-        if repository.get("type") == "sqlite":
-            prop = repository.get("properties", {})
-            r = SQLiteRepository(**prop)
-        else:
-            raise ValueError(f"Unknown repository type: {repository.get('type')}")
-        objectt = config.get("object", None)
-        if objectt.get("type") == "disk":
-            prop = objectt.get("properties", {})
-            o = Disk(**prop)
-        elif objectt.get("type") == "s3":
-            prop = objectt.get("properties", {})
-            o = S3(**prop)
-        elif objectt.get("type") == "sqlite":
-            prop = objectt.get("properties", {})
-            o = SQLiteObjectStorage(**prop)
-        else:
-            raise ValueError(f"Unknown object store type: {objectt.get('type')}")
-        experiment_id = config.get("experiment_id", "sample")
-        return cls(experiment_id, r, o)
+
+        data_cfg = config.get("data") or {}
+        data_type = data_cfg.get("type")
+        if data_type not in _REPOSITORY_BACKENDS:
+            raise ValueError(
+                f"Unknown repository type: {data_type!r}; "
+                f"expected one of {sorted(_REPOSITORY_BACKENDS)}"
+            )
+        repository = _REPOSITORY_BACKENDS[data_type](**data_cfg.get("properties", {}))
+
+        object_cfg = config.get("object") or {}
+        object_type = object_cfg.get("type")
+        if object_type not in _OBJECT_BACKENDS:
+            raise ValueError(
+                f"Unknown object store type: {object_type!r}; "
+                f"expected one of {sorted(_OBJECT_BACKENDS)}"
+            )
+        object_store = _OBJECT_BACKENDS[object_type](**object_cfg.get("properties", {}))
+
+        return cls(config.get("experiment_id", "sample"), repository, object_store)
 
     def __init__(self, experiment_id: str, repository=noop.Repository(), object_store=noop.Object()):
         self.experiment_id = experiment_id

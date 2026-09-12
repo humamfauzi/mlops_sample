@@ -1,5 +1,15 @@
 This is ML Ops project using Commodity Flow Survey 2017.
 
+> **Architecture note.** The deployed artifact is a **PyInstaller binary**, not a
+> container image. The model registry *and* the artifact store are a single
+> **SQLite file** (`example.db`), and repository settings are resolved by one
+> shared loader (`runtime_config.py` reading `config/runtime.json`) used by both
+> the trainer and the server.
+>
+> MLflow, S3, Postgres and Docker were retired. Sections below that describe
+> them are historical and are being rewritten — see `MIGRATION_PLAN.md` for
+> current status.
+
 # UV Package Manager
 
 This project uses UV for Python package management and dependency resolution. UV is a fast Python package manager that provides better performance and dependency resolution compared to pip.

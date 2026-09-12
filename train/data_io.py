@@ -5,7 +5,7 @@ from copy import copy
 from typing import Optional, List
 from train.sstruct import Pairs, Stage, FeatureTargetPair
 import numpy as np
-from train.column import TabularColumn
+from column.cfs2017 import TabularColumn
 from enum import Enum
 import time
 

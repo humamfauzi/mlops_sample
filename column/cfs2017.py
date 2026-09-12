@@ -53,11 +53,13 @@ class TabularColumn(ABC):
             raise ValueError(f"Cannot find enum with name {name}")
 
 class SampleEnum(Enum):
+    # Positional schema for the synthetic fixtures the test suite builds. The
+    # member count must match the fixture's column count, because
+    # Disk._replace_columns renames columns by position.
     COLUMN_ID = 1
     COLUMN_FEATURE = 2
     COLUMN_FEATURE_DELETED = 3 
     COLUMN_TARGET = 4
-    COLUMN_REMOVED = 5
 
     @classmethod
     def from_enum(cls, e:str):
@@ -134,7 +136,7 @@ class CommodityFlow(Enum):
         for member in cls:
             if member.name == e.upper():
                 return member
-        raise ValueError(f"Cannot find enum with name ")
+        raise ValueError(f"Cannot find enum with name {e}")
 
     @classmethod
     def primary_id(cls):
@@ -177,9 +179,13 @@ class CommodityFlow(Enum):
     @classmethod
     def feature(cls, current_column):
         """
+        Feature columns present in current_column.
+
+        The target is excluded: leaving it in would put the label in X and leak
+        it straight into training.
         """
-        all = cls.numerical() + cls.categorical()
-        return list(set(all) & set(current_column))
+        all = set(cls.numerical() + cls.categorical()) - {cls.target()}
+        return list(all & set(current_column))
 
 
 

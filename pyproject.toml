@@ -4,12 +4,10 @@ version = "0.1.0"
 description = "CFS 2017 shipment value prediction - training pipeline and inference server"
 requires-python = ">=3.10"
 dependencies = [
-    "boto3>=1.40.46",
     "dotenv>=0.9.9",
     "fastapi>=0.117.1",
     "numpy>=2.2.6",
     "pandas>=2.3.2",
-    "pytest>=8.4.2",
     "scikit-learn>=1.7.2",
     "uvicorn>=0.37.0",
 ]
@@ -17,6 +15,7 @@ dependencies = [
 [dependency-groups]
 dev = [
     "pyinstaller>=6.16.0",
+    "pytest>=8.4.2",
 ]
 
 # The deployed artifact is a PyInstaller binary (see tools/stamp_build.py and
@@ -27,7 +26,15 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-only-include = ["train", "server", "repositories", "column", "buildinfo.py"]
+only-include = [
+    "train",
+    "server",
+    "repositories",
+    "column",
+    "config",
+    "buildinfo.py",
+    "runtime_config.py",
+]
 
 # Keep the sdist deterministic. Without this, hatchling walks the working tree
 # and can sweep in local caches, virtualenvs and databases.
@@ -40,8 +47,10 @@ only-include = [
     "scripts",
     "tools",
     "train_config",
+    "config",
     "loadtest",
     "buildinfo.py",
+    "runtime_config.py",
     "pyproject.toml",
     "README.md",
     "Makefile",

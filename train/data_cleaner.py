@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from train.column import TabularColumn
+from column.cfs2017 import TabularColumn
 import pandas as pd
 from copy import copy
 from typing import Optional

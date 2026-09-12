@@ -6,13 +6,12 @@ from copy import copy
 from train.data_cleaner import Cleaner
 from column.cfs2017 import SampleEnum
 
-
 # it means each function call it would recreate the dataframe
 @pytest.fixture(scope="function")
 def df():
     ddict = {
         SampleEnum.COLUMN_ID: [1, 2, 3, 4],
-        SampleEnum.COLUMN_REMOVED: ["q", "q", "q", "q"],
+        SampleEnum.COLUMN_FEATURE_DELETED: ["q", "q", "q", "q"],
         SampleEnum.COLUMN_FEATURE: ["a", "a", np.nan, "b"],
         SampleEnum.COLUMN_TARGET: [123, 321, 122, 365],
     }
@@ -43,7 +42,7 @@ class TestDataFrameLazyCall:
     def test_remove_column_lazy(self, df):
         ddf = Cleaner(None)
         ddf.column = SampleEnum  # set column enum
-        cleaned_df = ddf.remove_columns([SampleEnum.COLUMN_REMOVED]).clean_data(df)
+        cleaned_df = ddf.remove_columns([SampleEnum.COLUMN_FEATURE_DELETED]).clean_data(df)
         assert cleaned_df.shape == (4, 2)
         assert cleaned_df.columns[0] == SampleEnum.COLUMN_FEATURE
         assert cleaned_df.columns[1] == SampleEnum.COLUMN_TARGET
@@ -63,7 +62,7 @@ class TestDataFrameLazyCall:
         ddf = Cleaner(None)
         ddf.column = SampleEnum  # set column enum
         cleaned_df = (
-            ddf.remove_columns([SampleEnum.COLUMN_REMOVED])
+            ddf.remove_columns([SampleEnum.COLUMN_FEATURE_DELETED])
             .remove_nan_rows()
             .clean_data(df)
         )
@@ -89,10 +88,10 @@ class TestDataFrameLazyCall:
                 [
                     SampleEnum.COLUMN_FEATURE,
                     SampleEnum.COLUMN_TARGET,
-                    SampleEnum.COLUMN_REMOVED,
+                    SampleEnum.COLUMN_FEATURE_DELETED,
                 ]
             )
-            .remove_columns([SampleEnum.COLUMN_REMOVED])
+            .remove_columns([SampleEnum.COLUMN_FEATURE_DELETED])
             .remove_nan_rows()
             .clean_data(df)
         )

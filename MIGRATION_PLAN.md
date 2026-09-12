@@ -14,10 +14,27 @@
 | 1 — Make the tree honest | ✅ done | `70a8d0e` |
 | 2 — Repair the build path | ✅ done | `a276673`, `8e76120` |
 | 3 — Verify the artifact | ✅ done | `19cc6f4` |
-| 4 — Unify configuration | ⬜ not started — needs decision (one shared config vs .env) | |
-| 5 — Retire the legacy stack | ⬜ not started — MLflow and S3 approved for removal | |
+| 4 — Unify configuration | ✅ done | *(this phase)* |
+| 5 — Retire the legacy stack | ✅ done | *(this phase)* |
 | 6 — Close the deployment loop | ⬜ not started — target decided: installed binary, no containers | |
 | 7 — Harden the registry | ⬜ not started | |
+
+**Phase 4** introduced `runtime_config.py` + `config/runtime.json`. Both the
+trainer (`ScenarioManager._resolve_repository`) and the server
+(`server.main.load_settings`) now resolve through it, and
+`train/test_runtime_config.py` asserts they agree — including when `.env`
+overrides the file. `GET /health` and the startup log report the resolved
+config and which environment variables won.
+
+**Phase 5** removed the MLflow, S3 and dummy backends, `repositories/abc.py`,
+10 S3-based train_configs, 8 dead files, the on-disk residue
+(`artifacts/`, `server/artifacts/`, `mlruns/`, `mlops_sample.db`), `boto3`
+(5 packages), and the Docker-era Makefile targets. The duplicated
+`train/column.py` was collapsed into `column/cfs2017.py`; its `feature()`
+now excludes the target, which the duplicate had stopped doing.
+
+*Outstanding:* `pgdata/` could not be deleted — it is owned by `nobody` with
+mode `700`, so removing it needs `sudo rm -rf pgdata`.
 
 **Phase 3 gate evidence** (both directions verified):
 

@@ -6,7 +6,7 @@ import os
 
 from enum import Enum
 from train.data_transform import Transformer, TransformationMethods, Keeper
-from train.column import SampleEnumTransformer as SampleEnum
+from column.cfs2017 import SampleEnumTransformer as SampleEnum
 
 
 TRACKING_PATH = "local"
