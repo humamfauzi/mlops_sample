@@ -45,7 +45,7 @@
 **The architectural thesis is unusually clean and worth stating up front:** the entire system is driven by a *declarative JSON instruction file*. A training run is described as an ordered list of steps (`data_io` → `data_cleaner` → `data_transformer` → `model_trainer` → `post_test`). Each step parses its own slice of the JSON into a component object exposing a uniform `execute(input) -> output` interface. `ScenarioManager` reduces the list by threading each component's output into the next. There is **no DAG engine, no scheduler, no orchestration framework** — just a fold over a list. The same data-model (a `Facade` over swappable storage backends) is used by both the trainer and the server, which is what makes the "train here, serve there" handoff work.
 
 **What actually works:**
-- The full train → track → nominate → publish → serve loop is functional and has produced real results (`EXPERIMENT_JOURNEY.md` documents a genuine 27% improvement in dollar-space MAE, from ~$10,025 to ~$7,310 per shipment).
+- The full train → track → nominate → publish → serve loop is functional and has produced real results (`EXPERIMENT_JOURNEY.md` documents a genuine 27% improvement in dollar-space MAE, from ~USD 10,025 to ~USD 7,310 per shipment).
 - Model *and* preprocessing state are persisted together and replayed faithfully at inference time — the hard part of ML serving, and the project gets it right.
 - A champion/challenger nomination system (`published` / `retracted` / `inferior`) implements model promotion with no manual step.
 - 35 of 36 unit tests pass.
@@ -70,7 +70,7 @@ Predict `SHIPMENT_VALUE` (dollars) for a freight shipment, given:
 - **Categorical signals:** origin/destination state & district, NAICS industry code, SCTG commodity code, transport MODE, quarter, export country, hazmat flag.
 - **Numerical signals:** shipment weight (lb), geodesic distance, routed distance (mi), weight factor.
 
-The dataset is the Census Bureau's **Commodity Flow Survey 2017 Public Use File** — a survey of ~6M shipment records covering US domestic freight. It is a *long-tailed, heavy-skewed target*: values span from under $100 to over $1M, which is why every serious configuration in the repo log-transforms the target and reports error in two spaces (log-space MAE and dollar-space MAE).
+The dataset is the Census Bureau's **Commodity Flow Survey 2017 Public Use File** — a survey of ~6M shipment records covering US domestic freight. It is a *long-tailed, heavy-skewed target*: values span from under USD 100 to over USD 1M, which is why every serious configuration in the repo log-transforms the target and reports error in two spaces (log-space MAE and dollar-space MAE).
 
 ### 2.2 The two metrics that define success
 
@@ -89,9 +89,9 @@ From `README.md:243-260`, the author's own roadmap lists 12 planned experiment s
 
 | Run | Rows | Features | Model | Log MAE | Dollar MAE | Status |
 |---|---|---|---|---|---|---|
-| Baseline | 10k | weight, naics | GBM 200/0.1/5 | 1.043 | ~$10,025 | retracted |
-| Experiment 1 | 100k | +distance, mode, sctg | GBM 500/0.1/7 | 0.875 | $8,252 | retracted |
-| **Experiment 2** | **1M** | +distance, mode, sctg | **GBM 500/0.1/7** | **0.849** | **$7,310** | **published** |
+| Baseline | 10k | weight, naics | GBM 200/0.1/5 | 1.043 | ~USD 10,025 | retracted |
+| Experiment 1 | 100k | +distance, mode, sctg | GBM 500/0.1/7 | 0.875 | USD 8,252 | retracted |
+| **Experiment 2** | **1M** | +distance, mode, sctg | **GBM 500/0.1/7** | **0.849** | **USD 7,310** | **published** |
 
 Model hygiene issues deferred to "Next Iteration" (`README.md:258-260`): *"Save model and transformation pickle file as a BLOB in SQLite. Remove S3 dependency"* — **this has since been done** (`repositories/sqlite.py:317-420`), and *"There is an error that in one hot encoder that was fitted without feature names"* — **this is still open**.
 
@@ -425,7 +425,7 @@ Given that OHE is `APPEND_AND_REMOVE` and therefore *cannot* be applied to the t
 - applies inverse transforms **to the prediction** (`:154-157`)
 - computes metrics against the raw `SHIPMENT_VALUE`
 
-**This is the project's best engineering idea.** `post_test` is a full, automated, artifact-contract integration test that catches train/serve skew at training time. The `$10,025 → $7,310` improvement it revealed is exactly the kind of signal that log-space MAE hides.
+**This is the project's best engineering idea.** `post_test` is a full, automated, artifact-contract integration test that catches train/serve skew at training time. The `USD 10,025 → USD 7,310` improvement it revealed is exactly the kind of signal that log-space MAE hides.
 
 Two flaws: (a) `execute()` returns the `object` **builtin** (`:194`) rather than anything meaningful; (b) `store_metrics` (`:169-172`) writes to `set_metric`, which targets `current_child_run_id`, while `set_post_test_row_size`/`set_post_test_intent` (`:185-186`) target the *parent* `run_id`. So post-test metrics live on the best child while post-test metadata lives on the parent. Confirmed in the live DB — run 81's `validation.post_test.mae` is on the child.
 
@@ -829,7 +829,7 @@ main.call_instruction
          │    └─ Disk.load_random_rows_via_csv(n=100000)  [full 6M-line scan + skiprows]
          │       → Cleaner.execute(...)                   [reuses training cleaner]
          ├─ check(inference, samples, ["mae"])
-         │    → project to available_input → replay transforms → predict → np.exp → MAE vs raw $
+         │    → project to available_input → replay transforms → predict → np.exp → MAE vs raw USD
          └─ store_metrics → validation.post_test.mae  (written to the BEST CHILD)
 
 Total: facade.set_total_runtime() → time_ms.all
@@ -852,7 +852,7 @@ Total: facade.set_total_runtime() → time_ms.all
 | `time_ms.all` | 19 | 1,040 – **1,917,941 ms** (32 min) |
 | `validation.post_test.mae` | 12 | **717.9 – 46,322.8** |
 
-Note the two zero-MAE runs (run 1) — `validation.*.mae = 0.0000` for the `standard_scaler_gboosting` run, alongside a `post_test` maximum of $46,322. A zero validation MAE is not a good model; it is a symptom of an early pipeline bug where metrics were recorded before predictions were meaningfully computed. Run 1 has exactly **one** child (`3GLQKS`, id 2) and all three splits report exactly `0.0`. It nonetheless holds `status.deployment=published` — because it was the **first** run for its intent, so `select_previously_published` returned `(None, inf)` and the `id is None` branch published it unconditionally (`repo.py:269-271`). **No quality gate guards the first entrant.**
+Note the two zero-MAE runs (run 1) — `validation.*.mae = 0.0000` for the `standard_scaler_gboosting` run, alongside a `post_test` maximum of USD 46,322. A zero validation MAE is not a good model; it is a symptom of an early pipeline bug where metrics were recorded before predictions were meaningfully computed. Run 1 has exactly **one** child (`3GLQKS`, id 2) and all three splits report exactly `0.0`. It nonetheless holds `status.deployment=published` — because it was the **first** run for its intent, so `select_previously_published` returned `(None, inf)` and the `id is None` branch published it unconditionally (`repo.py:269-271`). **No quality gate guards the first entrant.**
 
 ### 6.2 Inference trace — `GET /cfs2017/68IHBV/inference`
 
@@ -1313,7 +1313,7 @@ Given that `baseline.json` grids 54 DecisionTree + 36 KNN combinations, a user r
 
 ### 🔵 Observations (not defects)
 
-- **`post_test` is excellent.** Reconstructing the inference machine from persisted artifacts and evaluating on fresh data is the single best idea in this repository. It is what turned a meaningless "MAE 1.043" into an actionable "off by $10,025 per shipment."
+- **`post_test` is excellent.** Reconstructing the inference machine from persisted artifacts and evaluating on fresh data is the single best idea in this repository. It is what turned a meaningless "MAE 1.043" into an actionable "off by USD 10,025 per shipment."
 - **Leakage prevention is correct.** Transformations are fitted strictly on the training split (`data_transform.py:194-202`) with the reasoning documented in a comment.
 - **The manifest-as-API-schema pattern is elegant.** Deriving the server's validation contract from the training data removes an entire class of drift.
 - **`categorical → str` (not `category` dtype)** is the right call and is explained in a comment (`data_cleaner.py:53-55`).

@@ -47,7 +47,7 @@ more accurate. A 16-point grid is now roughly two minutes instead of forty.
 ---
 
 **Baseline:** the published model is run 81 (`68IHBV`), an **air-freight segment**
-GBM. Its recorded post-test error is $7,667. Measured properly it is **$9,098**.
+GBM. Its recorded post-test error is USD 7,667. Measured properly it is **USD 9,098**.
 
 **Headline:** before running a single new experiment, two measurement defects
 have to be fixed. Every post-test number in the registry was computed on ~700
@@ -61,20 +61,20 @@ obvious, cheap win.
 ## 1. What the registry actually says
 
 `EXPERIMENT_JOURNEY.md` reports the champion as a whole-population GBM at
-$7,310. The registry says otherwise.
+USD 7,310. The registry says otherwise.
 
 | run | config | segment | rows trained | recorded post-test | **true, 100k rows** |
 |---|---|---|---|---|---|
-| 73 | `beat_benchmark_1m` | all modes | 800,000 | $7,310 | **$9,671.83** |
-| 76 | `mode_parcel` | MODE=14 (26.2%) | 21,000 | $718 | **$1,457.57** |
-| **81** | `mode_air` | MODE 4,5 (69.9%) | 558,896 | $7,667 | **$9,098** ← published |
-| 83 | `mode_bulk` | rest (3.9%) | 28,923 | $46,323 | **$74,519.02** |
+| 73 | `beat_benchmark_1m` | all modes | 800,000 | USD 7,310 | **USD 9,671.83** |
+| 76 | `mode_parcel` | MODE=14 (26.2%) | 21,000 | USD 718 | **USD 1,457.57** |
+| **81** | `mode_air` | MODE 4,5 (69.9%) | 558,896 | USD 7,667 | **USD 9,098** ← published |
+| 83 | `mode_bulk` | rest (3.9%) | 28,923 | USD 46,323 | **USD 74,519.02** |
 
 Recorded figures understate error by **19% to 103%**.
 
 > **These corrected numbers are single draws too.** Seed 42 at 100k rows. Run 73
-> measured across five seeds gives a median of **$10,563** with a range of
-> $8,485–$11,394. Treat every dollar figure in this document as ±30% until it
+> measured across five seeds gives a median of **USD 10,563** with a range of
+> USD 8,485–USD 11,394. Treat every dollar figure in this document as ±30% until it
 > says otherwise. The *log-space* figures are stable to about ±0.005 and are
 > what the plan selects on.
 
@@ -98,8 +98,8 @@ its default of 1000 — while `PostTest.execute` recorded
 Verified by reproducing run 81's number exactly:
 
 ```
-n_rows=  1,000  ->     686 rows after filtering  ->  post_test MAE $7,667.22   ← matches the registry
-n_rows=100,000  ->  69,944 rows after filtering  ->  post_test MAE $9,097.73   ← the intended measurement
+n_rows=  1,000  ->     686 rows after filtering  ->  post_test MAE USD 7,667.22   ← matches the registry
+n_rows=100,000  ->  69,944 rows after filtering  ->  post_test MAE USD 9,097.73   ← the intended measurement
 ```
 
 `call.seed` and `call.check_against` are likewise parsed into `Config` and never
@@ -115,7 +115,7 @@ the sample to that segment:
 {"type": "filter_rows", "column": "mode", "operator": "in", "values": [14]}
 ```
 
-So run 76's "$718" is MAE **on parcel shipments only**, run 81's "$7,667" is
+So run 76's "USD 718" is MAE **on parcel shipments only**, run 81's "USD 7,667" is
 **on air shipments only**, and run 73's is on everything. `validation.test.mae`
 is segment-scoped for the same reason.
 
@@ -168,26 +168,26 @@ capacity the data supports.**
 |---|---|---|---|---|
 | rows | 5,978,523 | 4,180,464 (69.9%) | 1,566,194 (26.2%) | 231,865 (3.9%) |
 | share of total value | 100% | 51.6% | 2.4% | 46.0% |
-| mean value | $17,665 | $13,032 | $1,607 | $209,653 |
+| mean value | USD 17,665 | USD 13,032 | USD 1,607 | USD 209,653 |
 | median weight | 192 lb | 970 lb | 6 lb | 4,013 lb |
-| median $/lb | $3.40 | $1.70 | $23.00 | $3.08 |
+| median USD/lb | USD 3.40 | USD 1.70 | USD 23.00 | USD 3.08 |
 | hazmat rate | 6.86% | **8.92%** | 1.11% | 8.59% |
 | export rate | 3.65% | 1.33% | 3.59% | **45.90%** |
 
 Overall MAE is a row-count-weighted average of per-segment MAE:
 
 ```
-0.699 × $9,098  (air)     = $6,360
-0.262 × $1,458  (parcel)  =   $382
-0.039 × $74,519 (rest)    = $2,906
+0.699 × USD 9,098  (air)     = USD 6,360
+0.262 × USD 1,458  (parcel)  =   USD 382
+0.039 × USD 74,519 (rest)    = USD 2,906
                             ──────
-                            $9,648   vs $9,672 for the single all-modes model
+                            USD 9,648   vs USD 9,672 for the single all-modes model
 ```
 
 Routing by segment buys almost nothing on its own. **Air is 70% of rows, so it
-dominates the metric** — a 10% improvement there is worth ~$636 overall. The
-`rest` segment is only 3.9% of rows but contributes $2,906 because its error is
-so large; halving it is worth ~$1,450. Both are worth attacking, air first.
+dominates the metric** — a 10% improvement there is worth ~USD 636 overall. The
+`rest` segment is only 3.9% of rows but contributes USD 2,906 because its error is
+so large; halving it is worth ~USD 1,450. Both are worth attacking, air first.
 
 ---
 
@@ -286,7 +286,7 @@ commodity captures. The README planned this as "INTERSTATE / FREQUENCY_ORG_DEST"
 `filter_columns` can only select what already exists. Roughly a new cleaner
 verb plus a config entry.
 
-**C5 — The `rest` segment.** 3.9% of rows, 46% of total value, $74,519 error.
+**C5 — The `rest` segment.** 3.9% of rows, 46% of total value, USD 74,519 error.
 Add `export_country` (45.9% of these rows are exports) and `is_export`, and give
 it the capacity its data supports — run 83 overfit at depth 9 on 29k rows, so
 this segment needs *features* more than capacity.
@@ -307,12 +307,12 @@ trusted, not about changing the promotion metric.
 #### What was wrong
 
 The *mechanism* is real. Log error is `|log(ŷ) − log(y)|`, a ratio and therefore
-scale-invariant; dollar error is `|ŷ − y|`, absolute. Two $100,000 shipments:
+scale-invariant; dollar error is `|ŷ − y|`, absolute. Two USD 100,000 shipments:
 
 | | predicts | log errors | log MAE | dollar errors | dollar MAE |
 |---|---|---|---|---|---|
-| A | $20, $100,000 | 0.693, 0 | **0.347** | $10, $0 | **$5** |
-| B | $10, $200,000 | 0, 0.693 | **0.347** | $0, $100,000 | **$50,000** |
+| A | USD 20, USD 100,000 | 0.693, 0 | **0.347** | USD 10, USD 0 | **USD 5** |
+| B | USD 10, USD 200,000 | 0, 0.693 | **0.347** | USD 0, USD 100,000 | **USD 50,000** |
 
 Identical log MAE, dollar MAE differing 10,000×. On the real data, per-row log
 error and per-row dollar error correlate at **0.040**:
@@ -325,8 +325,8 @@ worst  25% of rows  ->  96.6% of total dollar error,  but 34.0% of total log err
 So the two metrics are close to orthogonal. But two further findings kill the
 fix I proposed:
 
-**1. The example I used was invalid.** I cited run 76 ($1,458) losing to run 81
-($9,098). Those are evaluated on *different populations* — parcel rows vs air
+**1. The example I used was invalid.** I cited run 76 (USD 1,458) losing to run 81
+(USD 9,098). Those are evaluated on *different populations* — parcel rows vs air
 rows — so the comparison is meaningless whichever metric you use. That is
 Defect 2, which Phase A2 already fixed. It is not evidence about metrics.
 
@@ -334,22 +334,22 @@ Defect 2, which Phase A2 already fixed. It is not evidence about metrics.
 100k samples from the same CSV:
 
 ```
-$8,123   $8,485   $9,672   $11,394   $10,563     (a 40% spread)
+USD 8,123   USD 8,485   USD 9,672   USD 11,394   USD 10,563     (a 40% spread)
 ```
 
 and a larger sample made it *worse*, not better:
 
 ```
-500k rows:  $10,241   vs   $15,567
+500k rows:  USD 10,241   vs   USD 15,567
 ```
 
 That is the target distribution, not a bug. `SHIPMT_VALUE` has a median of
-**$752** and a maximum of **$3.5 billion**. 78 shipments out of 5.98M — 0.0013%
+**USD 752** and a maximum of **USD 3.5 billion**. 78 shipments out of 5.98M — 0.0013%
 — hold **26% of all value**. In one 100k evaluation:
 
 ```
 single worst row  ->  7.0% of the entire dollar MAE
-worst 10 rows     ->  drop them and MAE falls $9,672 -> $7,133   (26% swing)
+worst 10 rows     ->  drop them and MAE falls USD 9,672 -> USD 7,133   (26% swing)
 ```
 
 Ten shipments out of 100,000 decide a quarter of the metric. Promoting on it
@@ -365,8 +365,8 @@ stage, not the ~5 lines I claimed.
 
 | # | Item | Rationale | Status |
 |---|---|---|---|
-| D1 | **Promotion needs both metrics, not one.** | Log-space alone published the worst-dollar model (§7.3); `VWLE` alone is gameable — value-weighted training scored **0.8007** on it while predicting **$2,821 for an $18 shipment** (§8.2). Gate: `VWLE` must improve **and** unweighted log MAE must not degrade sharply. | 🔴 **revisit** |
-| D2 | **Report dollar MAE as a range, never a point.** `scripts/post_test_benchmark.py --seeds` runs several draws and prints min/median/max, and warns when a single draw is being read as a measurement. | A single draw is ±40%. A difference under ~$2,000 is not real. | ✅ built |
+| D1 | **Promotion needs both metrics, not one.** | Log-space alone published the worst-dollar model (§7.3); `VWLE` alone is gameable — value-weighted training scored **0.8007** on it while predicting **USD 2,821 for an USD 18 shipment** (§8.2). Gate: `VWLE` must improve **and** unweighted log MAE must not degrade sharply. | 🔴 **revisit** |
+| D2 | **Report dollar MAE as a range, never a point.** `scripts/post_test_benchmark.py --seeds` runs several draws and prints min/median/max, and warns when a single draw is being read as a measurement. | A single draw is ±40%. A difference under ~USD 2,000 is not real. | ✅ built |
 | D3 | **Never compare across populations.** One intent = one evaluation set. | Done in A2. | ✅ done |
 | D4 | **Attack the misalignment in the objective, not the promotion metric.** If dollars matter, the loss should reflect them — value-weighted loss, or `loss="absolute_error"` (already available). | The gap is that squared-error-on-log is not dollar error. Changing what the model optimises is the honest lever. | ⬜ Phase C |
 | D5 | **Decide explicitly about the tail.** Either winsorize predictions and actuals (say at p99.9) before computing dollar MAE so it converges, or accept it as a headline with wide error bars. | Do this deliberately rather than by accident — trimming changes what the metric means. | ⬜ to decide |
@@ -406,14 +406,14 @@ The promotion metric is **not** on this list any more.
 ## 5. What "beating it" means
 
 Restated in a metric that can resolve a difference. Dollar MAE at 100k rows has
-a spread of roughly ±$1,600, so a single-draw dollar target is unfalsifiable.
+a spread of roughly ±USD 1,600, so a single-draw dollar target is unfalsifiable.
 
 | | current | target | resolvable? |
 |---|---|---|---|
 | log-space test MAE, air | 0.784 | **< 0.75** | ✅ spread is ~0.005 |
 | log-space test MAE, all modes | 0.849 | **< 0.82** | ✅ |
-| dollar MAE, air (100k, median of ≥5 seeds) | $9,098 | **< $8,100** | ⚠️ only as a multi-seed median |
-| dollar MAE, all modes (100k, median of ≥5 seeds) | $9,672 | **< $9,000** | ⚠️ same |
+| dollar MAE, air (100k, median of ≥5 seeds) | USD 9,098 | **< USD 8,100** | ⚠️ only as a multi-seed median |
+| dollar MAE, all modes (100k, median of ≥5 seeds) | USD 9,672 | **< USD 9,000** | ⚠️ same |
 
 **Select on log-space. Confirm with a multi-seed dollar median. Never on a
 single dollar draw.**

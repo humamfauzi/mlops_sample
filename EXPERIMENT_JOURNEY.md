@@ -41,7 +41,7 @@ against the raw `SHIPMENT_VALUE` column. This is the honest real-world metric.
 
 The log-space MAE of `1.043` sounds small but means the model's average error in log space
 is about one natural-log unit — approximately a 2.8x multiplicative error per prediction.
-In the post_test the prior 10k-row models averaged **~$10,025 per shipment** in actual
+In the post_test the prior 10k-row models averaged **~USD 10,025 per shipment** in actual
 dollar error.
 
 ---
@@ -82,8 +82,8 @@ A wider hyperparameter grid was swept: `n_estimators ∈ {300, 500}`, `lr ∈ {0
 Winner: `GBM(n_estimators=500, lr=0.1, max_depth=7)` — selected by test set (0.875).
 
 ```
-Baseline (10k rows, 2 features):  test MAE = 1.043 log, post_test MAE = ~$10,025
-Experiment 1 (100k, 5 features):  test MAE = 0.875 log, post_test MAE =  $8,252
+Baseline (10k rows, 2 features):  test MAE = 1.043 log, post_test MAE = ~USD 10,025
+Experiment 1 (100k, 5 features):  test MAE = 0.875 log, post_test MAE =  USD 8,252
 Improvement: -16% log-space, -18% actual dollars
 ```
 
@@ -121,18 +121,18 @@ were combined in one run:
 
 **Results:**
 
-| Model | Train MAE | Valid MAE | Test MAE | Post-test MAE ($) |
+| Model | Train MAE | Valid MAE | Test MAE | Post-test MAE (USD) |
 |---|---|---|---|---|
 | RandomForest | 0.836 | 0.896 | — | — |
-| GBM (winner) | 0.830 | 0.850 | **0.849** | **$7,310** |
+| GBM (winner) | 0.830 | 0.850 | **0.849** | **USD 7,310** |
 
 GBM won the comparison and was nominated as best. The 1M model displaced the 100k model
 as the new published champion.
 
 ```
-Baseline (10k, 2 features):     post_test MAE = ~$10,025
-Experiment 1 (100k, 5 features): post_test MAE =  $8,252  (-18%)
-Experiment 2 (1M, 5 features):  post_test MAE =  $7,310  (-27% vs baseline, -11% vs Exp 1)
+Baseline (10k, 2 features):     post_test MAE = ~USD 10,025
+Experiment 1 (100k, 5 features): post_test MAE =  USD 8,252  (-18%)
+Experiment 2 (1M, 5 features):  post_test MAE =  USD 7,310  (-27% vs baseline, -11% vs Exp 1)
 ```
 
 ---
@@ -146,8 +146,8 @@ The `post_test` is designed to measure real-world inference quality. It:
 3. Calls `np.exp` on the GBM output to invert the log transform.
 4. Computes MAE against the raw `SHIPMENT_VALUE` column (in dollars).
 
-A post_test MAE of **$7,310** means the model is off by an average of $7,310 per shipment
-in dollar terms. Given that CFS 2017 shipment values span from under $100 to over $1M, this
+A post_test MAE of **USD 7,310** means the model is off by an average of USD 7,310 per shipment
+in dollar terms. Given that CFS 2017 shipment values span from under USD 100 to over USD 1M, this
 is a reasonable result for a model with no domain-specific feature engineering.
 
 The log-space test MAE of 0.849 translates to roughly `exp(0.849) ≈ 2.3x` multiplicative
@@ -163,7 +163,7 @@ most of the gain. All eight hyperparameter combos in Experiment 1 beat every sin
 the baseline family.
 
 **2. More data helps, but with diminishing returns for GBM.**
-100k→1M rows reduced post_test MAE by ~$940 (-11%). The 10k→100k jump was ~$1,773 (-18%).
+100k→1M rows reduced post_test MAE by ~USD 940 (-11%). The 10k→100k jump was ~USD 1,773 (-18%).
 Each 10x of data yields less marginal gain, consistent with the law of diminishing returns in
 supervised learning.
 
@@ -180,7 +180,7 @@ data with log-transformed targets because it averages leaf values rather than fi
 **5. Post_test MAE is the honest metric.**
 The log-space test MAE (0.849 vs 1.043) tells only part of the story. The post_test converts
 predictions back to dollar space on a fresh sample, revealing that a 0.19 improvement in log
-MAE corresponds to ~$2,715 in real-world dollar error reduction per shipment.
+MAE corresponds to ~USD 2,715 in real-world dollar error reduction per shipment.
 
 ---
 
@@ -188,6 +188,6 @@ MAE corresponds to ~$2,715 in real-world dollar error reduction per shipment.
 
 | Run | Rows | Features | Model | Log MAE (test) | Dollar MAE (post_test) | Status |
 |---|---|---|---|---|---|---|
-| Baseline | 10k | weight, naics | GBM 200/0.1/5 | 1.043 | ~$10,025 | retracted |
-| Experiment 1 | 100k | +distance, mode, sctg | GBM 500/0.1/7 | 0.875 | $8,252 | retracted |
-| **Experiment 2** | **1M** | **+distance, mode, sctg** | **GBM 500/0.1/7** | **0.849** | **$7,310** | **published** |
+| Baseline | 10k | weight, naics | GBM 200/0.1/5 | 1.043 | ~USD 10,025 | retracted |
+| Experiment 1 | 100k | +distance, mode, sctg | GBM 500/0.1/7 | 0.875 | USD 8,252 | retracted |
+| **Experiment 2** | **1M** | **+distance, mode, sctg** | **GBM 500/0.1/7** | **0.849** | **USD 7,310** | **published** |

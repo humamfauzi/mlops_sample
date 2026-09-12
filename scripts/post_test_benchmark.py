@@ -120,11 +120,11 @@ def main(argv=None) -> int:
     def spread(values):
         return 100 * (max(values) - min(values)) / np.median(values)
 
-    print(f"  {'metric':<26}{'median':>14}{'spread':>10}   note")
-    print(f"  {'dollar MAE':<26}{'$' + format(np.median(dollar), ',.2f'):>14}"
+    print(f"  {'metric':<26}{'median':>18}{'spread':>10}   note")
+    print(f"  {'dollar MAE':<26}{'USD ' + format(np.median(dollar), ',.2f'):>18}"
           f"{spread(dollar):>9.0f}%   headline only")
-    print(f"  {'value-weighted log MAE':<26}{np.median(vwle):>14,.4f}"
-          f"{spread(vwle):>9.0f}%   dollar-aligned, weight capped at ${args.cap:,.0f}")
+    print(f"  {'value-weighted log MAE':<26}{np.median(vwle):>18,.4f}"
+          f"{spread(vwle):>9.0f}%   dollar-aligned, weight capped at USD {args.cap:,.0f}")
 
     if len(dollar) == 1:
         print()
@@ -137,11 +137,11 @@ def main(argv=None) -> int:
     if args.calibration and last is not None:
         actual, predicted = last
         print(f"\n  calibration by value decile (seed {seeds[-1]}):")
-        print(f"    {'decile':<8}{'value range':>30}{'rows':>8}{'log MAE':>9}"
+        print(f"    {'decile':<8}{'value range':>34}{'rows':>8}{'log MAE':>9}"
               f"{'mean actual':>15}{'mean pred':>15}{'ratio':>8}")
         for r in calibration_by_decile(actual, predicted, bins=10):
-            rng = f"${r['value_min']:,.0f}-${r['value_max']:,.0f}"
-            print(f"    {r['decile']:<8}{rng:>30}{r['rows']:>8,}{r['log_mae']:>9.3f}"
+            rng = f"USD {r['value_min']:,.0f}-{r['value_max']:,.0f}"
+            print(f"    {r['decile']:<8}{rng:>34}{r['rows']:>8,}{r['log_mae']:>9.3f}"
                   f"{r['mean_actual']:>15,.0f}{r['mean_predicted']:>15,.0f}{r['ratio']:>8.2f}")
         print("    ratio < 1 means the model under-predicts that decile")
 

@@ -1,6 +1,6 @@
 {
     "name": "skew_experiment",
-    "description": "HGB, loss=squared_error, trained on shipment_value < $100,000 (the top 1.7% of rows). Evaluated on the FULL population. Extends the trim trend: does removing more tail shrink the upper decile further?",
+    "description": "HGB, loss=squared_error, trained on shipment_value < USD 100,000 (the top 1.7% of rows). Evaluated on the FULL population. Extends the trim trend: does removing more tail shrink the upper decile further?",
     "instructions": [
         {
             "type": "data_io",

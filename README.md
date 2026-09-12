@@ -130,9 +130,9 @@ so nothing leaks across the boundary.
 
 The log-space metric drives model selection because it is available for every
 model. The post-test metric is the honest one: it includes the inverse
-transform, and it is what turned a meaningless "MAE 1.043" into "off by $10,025
+transform, and it is what turned a meaningless "MAE 1.043" into "off by USD 10,025
 per shipment". `EXPERIMENT_JOURNEY.md` records the campaign that used it to go
-from ~$10,025 to ~$7,310 per shipment.
+from ~USD 10,025 to ~USD 7,310 per shipment.
 
 Nomination compares `validation.test.<primary_metric>`, so a model can be
 crowned on the proxy while being worse in dollars. That is a known trade-off,

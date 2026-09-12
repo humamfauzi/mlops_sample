@@ -1,6 +1,6 @@
 {
     "name": "skew_experiment",
-    "description": "HGB squared_error, NO trim, loss weighted by min(value, $1M). Same lever as E5 trimming but pushed the other way: up-weight the tail instead of removing it.",
+    "description": "HGB squared_error, NO trim, loss weighted by min(value, USD 1M). Same lever as E5 trimming but pushed the other way: up-weight the tail instead of removing it.",
     "instructions": [
         {
             "type": "data_io",

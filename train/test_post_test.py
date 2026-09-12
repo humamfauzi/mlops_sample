@@ -7,7 +7,7 @@ always took its default of 1000 rows while the run recorded
 `size.post_test.row = 100000` from the call.
 
 The effect was not subtle: the published champion's error was recorded as
-$7,667 on 686 rows, against $9,098 on the 69,944 rows the config asked for.
+USD 7,667 on 686 rows, against USD 9,098 on the 69,944 rows the config asked for.
 """
 import json
 import pathlib
@@ -195,7 +195,7 @@ class TestValueWeightedLogMae:
 
     def test_separates_cases_that_log_mae_cannot(self):
         # Two shipments. Both models are 2x off on exactly one of them, so their
-        # log MAE is identical -- but model B is off on the $100,000 one.
+        # log MAE is identical -- but model B is off on the USD 100,000 one.
         y = np.array([10.0, 100_000.0])
         a = np.array([20.0, 100_000.0])
         b = np.array([10.0, 200_000.0])
@@ -218,9 +218,9 @@ class TestValueWeightedLogMae:
         assert value_weighted_log_mae(y, off_small) < value_weighted_log_mae(y, off_large)
 
     def test_cap_limits_how_much_one_row_can_matter(self):
-        # 20,000 ordinary shipments worth $100 each ($2m of total weight) plus
-        # one $500m shipment. Without a cap that single row is 99.6% of the
-        # weight; with a $1m cap it is a third.
+        # 20,000 ordinary shipments worth USD 100 each (USD 2m of total weight) plus
+        # one USD 500m shipment. Without a cap that single row is 99.6% of the
+        # weight; with a USD 1m cap it is a third.
         n = 20_000
         y = np.concatenate([np.full(n, 100.0), [500_000_000.0]])
         p = np.concatenate([np.full(n, 100.0), [100_000_000.0]])  # big row 5x off

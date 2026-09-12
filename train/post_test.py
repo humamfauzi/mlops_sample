@@ -22,7 +22,7 @@ DEFAULT_SEED = 42
 # value x relative error -- while capping how much the extreme tail can swing
 # the result. That brings the spread to ~6%.
 #
-# $1,000,000 is roughly the 99.9th percentile of SHIPMT_VALUE: 0.086% of rows
+# USD 1,000,000 is roughly the 99.9th percentile of SHIPMT_VALUE: 0.086% of rows
 # exceed it, and they hold 46% of all value.
 VWLE_CAP = 1_000_000.0
 

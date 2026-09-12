@@ -1,6 +1,6 @@
 {
     "name": "skew_experiment",
-    "description": "HGB, loss=squared_error, trained on shipment_value < $1,000,000. Evaluated on the FULL population (post_test population=all) so trimmed and untrimmed models are graded on identical rows.",
+    "description": "HGB, loss=squared_error, trained on shipment_value < USD 1,000,000. Evaluated on the FULL population (post_test population=all) so trimmed and untrimmed models are graded on identical rows.",
     "instructions": [
         {
             "type": "data_io",
