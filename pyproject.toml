@@ -46,6 +46,7 @@ only-include = [
     "column",
     "scripts",
     "tools",
+    "deploy",
     "train_config",
     "config",
     "loadtest",

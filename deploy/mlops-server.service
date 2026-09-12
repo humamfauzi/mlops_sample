@@ -1,0 +1,46 @@
+[Unit]
+Description=CFS shipment value inference server
+Documentation=file:/opt/mlops/README.md
+After=network-online.target
+Wants=network-online.target
+
+# A server that cannot load any published model exits during startup rather
+# than serving nothing, so a crash loop here means the registry is unusable.
+StartLimitIntervalSec=60
+StartLimitBurst=5
+
+[Service]
+Type=simple
+
+# The server binary is the deployed artifact; there is no container.
+ExecStart=/opt/mlops/bin/server_module
+WorkingDirectory=/opt/mlops
+
+# PORT, HOST and any repository overrides are read from here (mode 600).
+# runtime_config.py layers these on top of /opt/mlops/config/runtime.json.
+EnvironmentFile=/opt/mlops/.env
+Environment=HOST=0.0.0.0
+
+User=mlops
+Group=mlops
+
+Restart=on-failure
+RestartSec=5s
+
+# --- hardening -------------------------------------------------------------
+# The process only ever needs to read its config and read/write the SQLite
+# registry. Everything else is read-only.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/mlops
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+RestrictNamespaces=true
+LockPersonality=true
+
+[Install]
+WantedBy=multi-user.target

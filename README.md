@@ -1,270 +1,321 @@
-This is ML Ops project using Commodity Flow Survey 2017.
+# mlops_sample
 
-> **Architecture note.** The deployed artifact is a **PyInstaller binary**, not a
-> container image. The model registry *and* the artifact store are a single
-> **SQLite file** (`example.db`), and repository settings are resolved by one
-> shared loader (`runtime_config.py` reading `config/runtime.json`) used by both
-> the trainer and the server.
->
-> MLflow, S3, Postgres and Docker were retired. Sections below that describe
-> them are historical and are being rewritten — see `MIGRATION_PLAN.md` for
-> current status.
+End-to-end MLOps system that predicts the **dollar value of a freight shipment**
+from the US Census Bureau's [Commodity Flow Survey 2017](https://www.census.gov/data/datasets/2017/econ/cfs/historical-datasets.html)
+public use file.
 
-# UV Package Manager
+A training pipeline produces models, a SQLite file records them, and an HTTP
+server serves them. The deployed artifact is a **PyInstaller binary** — there
+is no container image, no MLflow, no Postgres and no S3.
 
-This project uses UV for Python package management and dependency resolution. UV is a fast Python package manager that provides better performance and dependency resolution compared to pip.
+---
 
-## Installing UV
+## Architecture
 
-If you don't have UV installed, you can install it using one of these methods:
+```
+                    train_config/*.json        (declarative experiment definitions)
+                             │
+                             ▼
+   ┌──────────────────────────────────────────────────────────────┐
+   │  TRAINING        uv run python -m train.main <config>        │
+   │                                                              │
+   │  Disk ──► Cleaner ──► Transformer ──► ModelTrainer ──► PostTest
+   │   │          │            │               │              │    │
+   │   └──────────┴────────────┴───────────────┴──────────────┘    │
+   │                     all writes via Facade                     │
+   └───────────────────────────────┬──────────────────────────────┘
+                                   │
+                    ┌──────────────▼───────────────┐
+                    │  repositories.Facade         │
+                    │   ├─ repository   (metadata) │ sqlite | disk | noop
+                    │   └─ object_store (artifacts)│ sqlite | disk | noop
+                    └──────────────┬───────────────┘
+                                   │
+                          ┌────────▼────────┐
+                          │   example.db    │  ◄── the contract between runtimes
+                          │  runs, metrics, │
+                          │  tags, blobs    │
+                          └────────┬────────┘
+                                   │
+   ┌───────────────────────────────▼──────────────────────────────┐
+   │  SERVING         ./dist/server_module   (systemd)            │
+   │                                                              │
+   │  /health · /cfs2017 · /cfs2017/enum_maps                     │
+   │  /cfs2017/{model}/metadata · /cfs2017/{model}/inference      │
+   └──────────────────────────────────────────────────────────────┘
+```
+
+**One SQLite file is the whole system.** `example.db` holds every run, metric,
+tag, property, fitted preprocessing pipeline and trained model. Copy it and you
+have reproduced the entire registry.
+
+The design has two properties worth calling out:
+
+- **The manifest is the API schema.** Training records the input columns a model
+  accepts, with the numeric range and categorical values observed in the
+  training split. The server validates requests against exactly that, so the
+  contract cannot drift from the data.
+- **`post_test` is an artifact-contract test.** At the end of a run it rebuilds
+  the inference machine *from stored artifacts* — the same code path the server
+  uses — and scores it on fresh rows in dollar space. A passing post-test is
+  real evidence that serving will work.
+
+---
+
+## Quickstart
 
 ```bash
-# Using the official installer (recommended)
-curl -LsSf https://astral.sh/uv/install.sh | sh
+uv sync                                                  # install dependencies
+uv run pytest --disable-warnings --ignore=pgdata -vv     # 107 tests
 
-# Or using pip
-pip install uv
+uv run python -m train.main --instruction_list           # list experiment configs
+uv run python -m train.main train_config/log_gboosting.json
 
-# Or using pipx (if you have it)
-pipx install uv
+make serve                                               # http://localhost:8000
 ```
 
-## Using UV in this Project
+Building the deployable artifacts:
 
 ```bash
-# Install all project dependencies
-uv sync
-
-# Add a new dependency
-uv add <package-name>
-
-# Remove a dependency
-uv remove <package-name>
-
-# Run Python with the project environment
-uv run python <script.py>
-
-# Run tests using pytest
-uv run pytest
-
-# Run tests with project-specific options
-uv run pytest -x --disable-warnings --ignore=pgdata -vv
-
-# Run a specific test file
-uv run pytest path/to/test_file.py
-
-# Run all test in a folder
-uv run pytest path/to/test_folder/
-
-# This codes build around modules. It should run use -m flag. How to run train
-uv run python -m train.main <args>
-
-# Activate the virtual environment
-source .venv/bin/activate  # On Linux/Mac
-# or
-.venv\Scripts\activate     # On Windows
-
-# Install dependencies for development
-uv sync --dev
-
-# Run the HTTP server
-uv run uvicorn server.main:app --host 0.0.0.0 --port 8000
+make build-binaries    # stamps provenance, builds dist/train_module + dist/server_module
+make smoke-test        # starts the server binary and verifies it actually serves
 ```
 
-## Project Dependencies
+---
 
-The project dependencies are managed in `pyproject.toml`. Key dependencies include:
-- scikit-learn: For machine learning models
-- numpy: For numerical computations
-- pandas: For data manipulation
-- fastapi: For API endpoints
-- pytest: For testing
+## Training
 
-# Dataset
-This machine learning operations use Commodilty Flow Survey 2017 ([datasource](https://www.census.gov/data/datasets/2017/econ/cfs/historical-datasets.html), [guide](https://www2.census.gov/programs-surveys/cfs/datasets/2017/cfs_2017_puf_users_guide.pdf)). We try to predict the price of the good
-based on variable we have like classification of goods, origin state, destination state, its weight and other variable.
+A run is described by a JSON file in `train_config/`. It is an ordered list of
+steps, each with `properties` and a `call` list:
 
-Here are the column for the dataset
-| Name                       | Description                                                                |
-|----------------------------|----------------------------------------------------------------------------|
-| SHIPMENT_ID                | Unique identifier for the shipment                                         |
-| ORIGIN_STATE               | State identifier using FIPS state code                                     |
-| ORIGIN_DISTRICT            | District identifier using FIPS code                                        |
-| ORIGIN_CFS_AREA            | Concatenation of state and district                                        |
-| DESTINATION_STATE          | State identifier using FIPS state code                                     |
-| DESTINATION_DISTRICT       | District identifier using FIPS code                                        |
-| DESTINATION_CFS_AREA       | Concatenation of state and district                                        |
-| NAICS                      | North American Industry Classification System                              |
-| QUARTER                    | Quarter of the year (Q1, Q2, Q3, or Q4)                                     |
-| SCTG                       | Standard Classification of Transported Goods                               |
-| MODE                       | Transportation means like truck, ship, airplane, etc.                      |
-| SHIPMENT_VALUE             | Shipment value measured in dollars                                         |
-| SHIPMENT_WEIGHT            | Shipment weight measured in pounds                                         |
-| SHIPMENT_DISTANCE_CIRCLE   | Geodesic straight line distance from origin to destination, measured in miles |
-| SHIPMENT_DISTANCE_ROUTE    | Actual routing distance of shipment, measured in miles                     |
-| IS_TEMPERATURE_CONTROLLED  | Indicates if the shipment has deliberate temperature control               |
-| IS_EXPORT                  | Indicates if the shipment is intended for export                           |
-| EXPORT_COUNTRY             | Destination country for export                                             |
-| HAZMAT                     | Indicates if the shipment contains hazardous materials                     |
-| WEIGHT_FACTOR              | Weight factor for the shipment                                             |
-
-The full definition can be found in guide
-
-# Repository
-This is the main repository for the machine learning operations. There are two main folder here which is train and server.
-Train contains all materials for training such as loading data, preprocessing, and actual model creation. Server
-contain all server initialization to server our machine learning endpoint.
-
-There are support folder like dataset where we store all of our dataset there. We use DVC to ensure that dataset we have
-is replicable to everyone with same DVC bucket access. We also add loadtest folder where all code related to loadtest located.
-This will become important when automating loadtest via GitHub actions.
-
-There are also support files that helps us running responsible for deployment and GitHub actions. All of our GitHub actions
-stored under `.github` folder. We will discuss further below. We also create several dockerfile so our build stay the same.
-Last we store all our docker-compose file both for training and serving in cloud.
-
-This repositiry should contain all you need to train and serve machine learning operations. 
-
-# Environment
-There several things you need to set up especially environment variable. There are at least five enviroment variable
-you need to have to train and server this machine learning operations.
-
-1. `HOST_VALUE_PATH` decide what level of docker sharing volume you want to have with your container. `.` means you share
-whole repository to the container.
-2. `AWS_ACCESS_KEY` for allowing process like sending data to DVC remote repositories
-3. `AWS_SECRET_KEY` secret key to let AWS know whether you allow to do what you intented to do in cloud service.
-4. `PORT` for server port. Docker compose would try to read this when deciding which port should use
-5. `TRACKER_PATH` the ML FLow URL path. If you deploy your ML FLow server in local, you can put `localhost`
-6. `STAGE` telling the running app what kind of stage it should take. 
-
-AWS environment variable can be ignored if you use MinIO as S3 compatible object storage. DVC
-need to set up credentials before you can push and pulling data from remote repository. To work with DVC you need
-1. a storage and access credentials for it
-2. the dataset itself
-3. a new folder for containing the dataset because DVC manage its own .gitignore (list of file that wont be committed when `git add`)
-4. see in `Makefile` command `register-dvc-remote` to add DVC remote repositories.
-5. Once credentials added, then add the file
-6. Once the file added, DVC would create a gitignore ignoring the data but create a metadata that tells where to pull the data (if have right credentials)
-8. After obtaining metadata, push it like regular file in reposiotry. The dataset should be ignored.
-
-The repository Github stored like any other repository. You need to have PAT (Personal Access Token) to do pull and push in repository.
-Once you have PAT, you can use it in your `.netrc` file so you dont need to fill it every time pull or push happen. Sample of `.netrc` can be seen below
-```
-machine github.com
-login <github username>
-password <generated PAT>
+```json
+{
+  "name": "post_test_log_gboosting",
+  "description": "Scale up to 1M rows with the winning feature set.",
+  "instructions": [
+    { "type": "data_io",        "properties": {...}, "call": [...] },
+    { "type": "data_cleaner",   "properties": {...}, "call": [...] },
+    { "type": "data_transformer","properties": {...}, "call": [...] },
+    { "type": "model_trainer",  "properties": {...}, "call": [...] },
+    { "type": "post_test",      "properties": {...}, "call": [...] }
+  ]
+}
 ```
 
-# Experimenting
-We use ML Flow for tracking and managing our models. There are several things we need to understand about ML Flow before we use it.
-ML Flow can be divided into experiment and runs. Currently, we name experiment `humamtest` (see `train/main.py`).
-Experiment can have many runs. In the same file, we generate a run identifier using six random char generator. So everytime
-it would have different run identifier (ML FLow have its own identifier but its too log and designed to be absolute unique).
+`ScenarioManager` builds each step into a component and folds the pipeline,
+threading every component's output into the next. Steps run in order;
+`data_io` must be first and `post_test`, if present, last.
 
-In each run, we preprocess and run several model and compare it. One thing that ML Flow API excels is that we can store training artifacts
-in each run. This is useful because our objective is not only train a model but also deploy it in a server. ML Flow also provide comparison between
-run so we know which one is perform well.
+**`name` is a competition key, not a title.** Runs sharing a `name` compete
+directly — the nomination logic matches on it — so several configs deliberately
+share one intent to be compared head to head.
 
-> [!NOTE]
-> After many attempts to use ML Flow, we found the ideal machine learning tracking and administration. ML Flow have at least three level tracking.
-First is the **experiment** level which we discuss before. In a single experiment, any run should have same objective. In this particular case,
-our objective is to find the model that correctly estimate pricing of a commodity. If we have different intention, even with same dataset, we should have different
-experiment. Experiment can have many runs (it called one to many relationship). This is the second level. We call it **parent run** because a run can have
-**child run** which is the third level. A parent run is what we create when we run the training process. Each model training (different parameter with same model
-e.g DecisionTree count as different model) should occupy exactly one child run. For example, we want to run two model linear regression and decision and each have
-two different parameter, then we should have four child runs under one parent run.
+| Step | What it does |
+|---|---|
+| `data_io` | loads CSV, renames columns positionally to the `column_reference` schema |
+| `data_cleaner` | queued row/column operations: `filter_columns`, `remove_columns`, `remove_nan_rows`, `filter_rows` |
+| `data_transformer` | `log_transformation`, `standardization`, `min_max_transformation`, `normalization`, `one_hot_encoding` |
+| `model_trainer` | exhaustive hyperparameter grid over 7 sklearn regressors |
+| `post_test` | rebuilds inference from artifacts and scores it on fresh rows |
 
-> [!NOTE]
-> After trying preprocess and create model at the same run, I think it is better to separate model creation and preprocess so both have their own run.
-A preprocess should take input of an dataset and output of processed dataset which later can be consumed by training. A run can be diffentiated via tags.
+Splitting is 80/10/10 and transformations are fitted on the training split only,
+so nothing leaks across the boundary.
 
-In each experimentation, we need to declare where we put our artifacts so the server can take it when initialization.
+### Two metrics, and why both matter
 
-# Test Units
-We have test unit in our train process because it involves many methods that works together for training.
-Our strategy is that each method (as long as not trivial) should have a test unit to verify its works.
-We divide our training process into five separate class which is
-1. Data Loader responsible reading file and turning it to desired data frame with designated column (if tabular)
-2. Data Cleaner which clean the data
-3. Data Preprocess which doing process like one hot encode, min max, impute data etc.
-4. Model which train data using desired model
-5. Scenario manager which manage four class above to achieve the desired function
+| Metric | Measured on | Units |
+|---|---|---|
+| `validation.test.mae` | held-out 10% split | `log(dollars)` |
+| `validation.post_test.mae` | 100k fresh rows from the raw CSV | dollars |
 
-We use pytest to test those classes. All test units contained in file `test_*`. This test would be picked by pytest
-and reported if there is a mismatch in assertion. It should be noticed that test unit should be self contained.
-It should run with same result in any machine which has this reposiotry and install pytest.
+The log-space metric drives model selection because it is available for every
+model. The post-test metric is the honest one: it includes the inverse
+transform, and it is what turned a meaningless "MAE 1.043" into "off by $10,025
+per shipment". `EXPERIMENT_JOURNEY.md` records the campaign that used it to go
+from ~$10,025 to ~$7,310 per shipment.
 
-# Setup and Deployment CI/CD
-In the reposiotry there is a folder called `.github`. This folder manage all Github Actions that this repository will trigger.
-There three actions that this repository able to perform.
+Nomination compares `validation.test.<primary_metric>`, so a model can be
+crowned on the proxy while being worse in dollars. That is a known trade-off,
+not an oversight.
 
-First is the test unit, every time someone push changes to the repository, the test unit will automatically run.
-this would trigger every time some merge happens to verify that changes does not broke the code. 
+---
 
-Second is the autobuild docker everytime someone change the server configuration. So any server change would be
-incorporated to the docker image. All things we need to run a server already contained within the docker.
-So we only need to pull and run it in an instance.
+## Serving
 
-> [!NOTE]
-> Ideally after we build docker, we need to inform our deployment that we has new docker and the deployment should retrieve the latest
-container and using it as server. Currently, we dont have that. After build is verified, we go to deployment and change it manually via
-SSH. There are few potential way to inform deployment about latest docker container. The easiest one seems to use SNS/SQS pairs.
-Basically, after the creation complete, we send the message to SNS about the latest version docker. Our deployment retrieve message via SQS.
-After message received, deployment would retrieve the latest docker and deploy it.
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/health` | status, loaded model count, build provenance, resolved config |
+| GET | `/cfs2017` | every published model with the inputs each accepts |
+| GET | `/cfs2017/enum_maps` | label maps for NAICS, mode, SCTG, hazmat, states, export country |
+| GET | `/cfs2017/{model}/metadata` | description, input schema, parent and child metrics |
+| GET | `/cfs2017/{model}/inference?…` | a prediction |
 
-Third is the loadtest that we need to trigger manually. We dont want to spam traffic to our server so we only use it when we need to verify whether
-the server is okay. We use locust to loadtest it. Since it runs on a Github Action, we use `--headless` options because we dont need any user interface.
-Then we hit the server based on specification we give. In our current format, we create a 100 users to access our endpoints for 3 minutes.
-All of this configuration can be seen in `.github/workflows`.
+```bash
+# discover the contract rather than guessing it
+curl -s localhost:8000/cfs2017 | python3 -m json.tool
 
-Github Workflow able to pass secrets to the actions. Since we want to hid our server location, we put it in github actions secrets.
-This is considered a good practice so we dont commit our secret and credentials to the codebase.
+curl -s "localhost:8000/cfs2017/68IHBV/inference?NAICS=326&SHIPMENT_WEIGHT=20000&MODE=4&SCTG=35&SHIPMENT_DISTANCE_ROUTE=500"
+# {"message":"success","data":{"shipment_value":41285.21735099679}}
+```
 
-# Deployments
-We deploy our instance in AWS. We centralized our model tracking and artifact repository in an docker instance living in an EC2 instance.
-Currently, to cut cost, both our ML Flow server, staging server, and production server living in the same instance but with different port.
+**Query keys are the uppercase enum names from the model's own manifest.**
+`SHIPMENT_WEIGHT`, not `shipment_weight`; values must fall inside the range or
+`available_values` recorded at training time. Violations return `400` naming the
+offending column:
 
-Our EC2 using a spot instance to reduce cost so it might get termintated if the EC2 isntance is in high demand. We allocate `t3.medium`
-and several similar instance to create redundancy. 
+```json
+{"error": "Incomplete input data.", "missing_column": "SCTG"}
+```
 
-This instance have a VPC, a subnet, a security group, elastic IP and a internet gateway to so we can access it from our local or just anywhere
-with internet connection. I will explain each of this term shortly. A VPC (Virtual Private Cloud) is where we locate our server.
-You can think it as a network group. A subnet is a subset of VPC. A subnet can be connected to internet gateway so that 
-every instance under this subnet would gain internet access and able to be accessed via internet. Security group is a firewall that attached to
-a subnet. This dictate allowed traffic information and what not allowed. In our case, we allow four special port. One for MLFLow, one for staging, 
-one for production, and one for SSH because we need to pull and assign new docker server. This would allow us to acces our server and loadtest
-mentioned in previous part. 
+An unknown model returns `404` and lists the ids that do exist.
 
-EC2 comes with empty Amazon linux, so for the start we need to install docker and docker compose. After all installed, we need copy our docker compose for server
-so that we can deploy it in both staging and server. Currently, both staging and production have same docker container (ideally not). After we obtain the docker-compose file,
-we need to fill `.env` file since the docker compose read variable like port and stage from there. Docker compose would refuse to run if `.env` is not provided.
+---
 
-Once it deployed, you can access it from your local, provided that you have correct networking settings. Once deployed, you can fill the host for you Github Action secret
-and trigger Github Actions for loadtest. This would be like actual load test because it hits server which also everyone hit. 
+## Model lifecycle
 
-The server docker container can be configured to pick the best model from ML Flow repository. As long as both server and training access same ML Flow instance,
-server can retrieve any model registered in ML FLow instance. Currently, it only pick the latest model.
+Every training run creates a parent run with one child run per hyperparameter
+combination. The best child is tagged `level=best`; the parent is then entered
+into a competition scoped by `name.intent`:
 
-> [!NOTE]
-> As you may realize, server container also ML FLow client so that it could retrieve any model (under a run) as a inference model. It also took preproces pickle to convert
-user input to model input. This run can be tagged so we can program which model a server should take.
+| Tag | Meaning |
+|---|---|
+| `status.deployment = published` | current champion for its intent; the server loads it |
+| `status.deployment = retracted` | was champion, displaced by a better run |
+| `status.deployment = inferior` | never won |
+| `level = best` | the winning child within a parent run |
 
+Promotion is automatic: if the candidate's test score beats the incumbent's, the
+incumbent is retracted and the candidate published. There is no manual approval
+step, and **no quality gate on the first run for a new intent** — the first
+entrant is published unconditionally.
 
-# Available Plan
-1. *PIPELINE CHECK* small amount of data; use KNN, Tree model, linear regression, and bagging model like XGBoost and AdaBoost.
-2. *BASELINE* Use the shipment value mean as a baseline prediction
-3. *LOG_TRANSFORMED* Use shipment weight and shipment value; both log transformed.
-4. *NAICS_OHE* Use NAICS one hot encode, shipment weight and shipment value; both log transformed
-5. *NORMALIZED* Same as above but now after logged, it should also be normalized
-6. *HAZMAT_EXPORT_OHE* Use Hazmat, Export both one hot encode and NAICS one hot encode, shipment weight and shipment value.
-7. *EXPORT_REFRIGATED_OHE* Use Export, Hazmat, Export destination, Refrigated, NAICS and shipment weight and shipment value
-8. *SHIPMENT_DISTANCE_LOG_NORM* Use Export, Hazmat, Export destination, Refrigated, NAICS and shipment weight, and shipment distance, and shipment value. All numerical value are logged and normalized.
-9. *MODE_OHE* Use Export, Hazmat, Export Destination, Mode, Refrigated, NAICS, shipment weight and shipment distance, and shipment value. All numerical value are
-logged and normalized.
-10. *INTERSTATE* Add new column called `is_interstate`, only checked if the origin and destination have different value.
-11. *FREQUENCY_ORG_DEST* Use the both frequency and mean as origin and destination so we add four more columns and drop all the origin and destination related table. Add weight and shipment value.
-12. Combine 10 and 11
+---
 
-# Next Iteration
-1. Save model and transformation pickle file as a BLOB in SQLite. Remove S3 dependency.
-2. There is an error that in one hot encoder that was fitted without feature names.
+## Configuration
+
+Repository and experiment settings resolve through one loader
+(`runtime_config.py`) used by **both** runtimes, so they cannot disagree about
+which database they are using. Order, first wins:
+
+1. an explicit path argument
+2. `$MLOPS_CONFIG`
+3. `./config/runtime.json` (relative to the working directory)
+4. `<repo root>/config/runtime.json`
+5. built-in defaults
+
+Environment variables are then overlaid, which is how a host points at its own
+registry without editing tracked files:
+
+| Variable | Purpose |
+|---|---|
+| `EXPERIMENT_ID` | which experiment the server publishes from |
+| `COLUMN_REFERENCE` | which schema describes the data (`commodity_flow`, `sample`, `sample_enum_transformer`) |
+| `REPOSITORY_DATA` / `REPOSITORY_DATA_PATH` | metadata store |
+| `REPOSITORY_OBJECT` / `REPOSITORY_OBJECT_PATH` | artifact store |
+| `MLOPS_CONFIG` | alternate config file |
+| `PORT` | server port (default 8000) |
+
+`GET /health` and the startup log report the resolved configuration **and which
+environment variables overrode it** — reporting only the file would hide an
+env-only deployment.
+
+A `train_config` may pin its own `repository` block to opt out of the shared
+configuration (`base_train.json` does, to use the disk store for debugging).
+An empty block `{}` selects the noop backends, which is what the test suite uses
+to stay off the real database.
+
+---
+
+## Dataset
+
+The CFS 2017 public use file (~477 MB, 5.98M rows, 20 columns) is tracked with
+DVC, not git:
+
+```bash
+make register-dvc-remote   # needs AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY
+dvc pull                   # dataset/cfs_2017.csv
+```
+
+The CSV's own header is **discarded**: columns are matched to the
+`column_reference` enum by **1-based position** and renamed to enum member
+names. Reordering columns upstream silently corrupts every feature — see
+`column/cfs2017.py`.
+
+`explore_cfs.py` is a standalone EDA script from the feature-selection work. It
+reads the raw CSV with the original Census column names, so its vocabulary
+differs from the pipeline's.
+
+---
+
+## Testing
+
+```bash
+uv run pytest --disable-warnings --ignore=pgdata -vv
+```
+
+107 tests, all offline — no network, no `example.db`, no 477 MB CSV. Covered:
+the cleaner's lazy operations, positional column replacement, every
+transformation, the pipeline end to end, configuration resolution and
+cross-runtime agreement, nomination and model lookup, and manifest construction.
+
+Two verification layers sit outside pytest:
+
+- **`scripts/make_fixture_db.py`** runs the real pipeline over synthetic rows to
+  build a small registry with one published model.
+- **`scripts/smoke_test.sh`** starts a *built binary* against that registry and
+  asserts it becomes healthy, that its provenance stamp matches `HEAD`, that
+  inference returns a plausible number, and that an unknown model yields 404.
+
+The smoke test exists because a stale binary once shipped: `dist/server_module`
+had been frozen from a commit predating the storage backend it needed, crashed
+on startup, and nothing in the repository could detect it.
+
+---
+
+## Deployment
+
+See **[`deploy/README.md`](deploy/README.md)** for the full runbook.
+
+```bash
+make build-binaries && make smoke-test
+sudo deploy/install.sh
+```
+
+Installs to `/opt/mlops` as a systemd service, refuses to install a binary that
+fails its own smoke test, and verifies `/health` before declaring success.
+
+---
+
+## Project layout
+
+```
+train/            offline pipeline (scenario manager, io, cleaner, transform, model, post-test)
+server/           FastAPI inference (routes, transformation replay, response types)
+repositories/     storage facade + sqlite/disk/noop backends
+column/           column schemas (the positional contract with the CSV)
+config/           runtime.json - shared repository settings
+train_config/     10 declarative experiment definitions
+scripts/          fixture builder + artifact smoke test
+tools/            build provenance stamping
+deploy/           systemd unit, installer, runbook
+```
+
+---
+
+## Design notes and limitations
+
+- **Positional column mapping.** The CSV header is ignored; columns map to enum
+  members by index. Deliberate, but brittle.
+- **Parent/child runs through a repository, not a scheduler.** There is no DAG
+  engine — a run is a fold over an ordered list.
+- **Prediction runs on the event loop.** `TimeoutMiddleware` returns 504 after
+  3s but does not interrupt the work; a slow prediction still blocks.
+- **Six-character run ids.** Generation now checks for collisions, but the id
+  space is small and lookups are scoped to a parent run rather than relying on
+  global uniqueness.
+- **`pgdata/`** is a leftover from the Postgres era, owned by `nobody` with mode
+  `700`. Safe to remove with `sudo rm -rf pgdata`.
+
+`REPOSITORY_MAP.md` is a full architectural analysis with a severity-ranked
+findings register; `MIGRATION_PLAN.md` tracks the migration from the earlier
+Docker/MLflow/S3 stack and what remains.

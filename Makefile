@@ -10,7 +10,7 @@ PYTHON ?= uv run python
 
 .PHONY: test train train-all serve list-models health manual-hit \
         build-binaries build-train-module build-server-module \
-        smoke-test smoke-fixture clean clean-exe tags register-dvc-remote
+        smoke-test smoke-fixture deploy clean clean-exe tags register-dvc-remote
 
 # --------------------------------------------------------------------- tests
 test:
@@ -78,6 +78,10 @@ smoke-test:
 # build the fixture registry the smoke test runs against
 smoke-fixture:
 	uv run python scripts/make_fixture_db.py .smoke/fixture
+
+# install the server binary as a systemd service (see deploy/README.md)
+deploy:
+	sudo ./deploy/install.sh
 
 # --------------------------------------------------------------------- misc
 register-dvc-remote:
