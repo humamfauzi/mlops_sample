@@ -53,6 +53,15 @@ class Transformer:
     def keeper_builder(self,typee,  column, col, condition, count):
         c = column.from_enum(col).name
 
+        if typee == "one_hot_encoding" and condition != TransformationMethods.APPEND_AND_REMOVE.name:
+            # One-hot encoding always expands into new columns and drops the
+            # original; a config asking for "replace" used to be accepted and
+            # then silently ignored.
+            raise ValueError(
+                f"one_hot_encoding only supports condition "
+                f"{TransformationMethods.APPEND_AND_REMOVE.name!r}, got {condition!r}"
+            )
+
         inverse_transform = False
         if col.upper() == column.target():
             inverse_transform = True

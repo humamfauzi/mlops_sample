@@ -51,21 +51,23 @@ class ModelWrapper:
         return self
 
     def validate(self, pairs: Pairs, metrics: List[str]):
+        """Score train and valid splits, predicting once per split.
+
+        The previous version predicted inside the metric loop, so a three-metric
+        request ran six full predictions instead of two, and the recorded
+        validation time was whichever metric happened to run last.
+        """
         if not isinstance(pairs, Pairs):
             raise TypeError(f"Input data must be of type Pairs but get {type(pairs)}")
-        y_pred = self.model.predict(pairs.valid.X)
         mm = self.metric_map()
-        pairs = {"train": pairs.train, "valid": pairs.valid}
-        for metric in metrics:
-            for stage in ["train", "valid"]:
-                start = time.time()
+        for stage, pair in (("train", pairs.train), ("valid", pairs.valid)):
+            start = time.time()
+            y_pred = self.model.predict(pair.X)
+            y_true = np.array(pair.y).reshape(-1)
+            for metric in metrics:
                 if metric in mm:
-                    y_pred = self.model.predict(pairs[stage].X)
-                    y_true = np.array(pairs[stage].y).reshape(-1)
-                    value = mm[metric](y_true, y_pred)
-                    duration_ms = (time.time() - start) * 1000.0
-                    self.facade.set_validation_time(stage, duration_ms)
-                    self.facade.set_metric(stage, metric, value)
+                    self.facade.set_metric(stage, metric, mm[metric](y_true, y_pred))
+            self.facade.set_validation_time(stage, (time.time() - start) * 1000.0)
         return self
 
     def metric_map(self):
@@ -75,19 +77,28 @@ class ModelWrapper:
             "mae": lambda y_true, y_pred: np.mean(np.abs(y_true - y_pred))
         }
 
-    def test(self, pairs: Pairs, metrics: List[str]):
+    def test(self, pairs: Pairs, metrics: List[str]) -> dict:
+        """Score the held-out test split and return every metric by name.
+
+        Returning a mapping rather than the loop variable matters: nomination
+        compares the candidate against the incumbent's stored
+        `validation.test.<primary_metric>`, so the caller must be able to pick
+        the primary metric rather than receive whichever one happened to be
+        computed last.
+        """
         if not isinstance(pairs, Pairs):
             raise TypeError(f"Input data must be of type Pairs but get {type(pairs)}")
         start = time.time()
         y_pred = self.model.predict(pairs.test.X)
+        y_true = np.array(pairs.test.y).reshape(-1)
         mm = self.metric_map()
+        scores = {}
         for metric in metrics:
             if metric in mm:
-                y_true = np.array(pairs.test.y).reshape(-1)
-                value = mm[metric](y_true, y_pred)
-                self.facade.set_metric("test", metric, value)
+                scores[metric] = mm[metric](y_true, y_pred)
+                self.facade.set_metric("test", metric, scores[metric])
         self.facade.set_validation_time("test", (time.time() - start) * 1000.0)
-        return value
+        return scores
 
     def set_as_the_best(self):
         self.facade.tag_as_the_best()
@@ -174,17 +185,25 @@ class ModelTrainer:
             raise ValueError(f"Model type {model_type} is not supported")
 
     def generate_model(self, model_type, hyperparameters, grid_type):
+        if grid_type == self.parameter_grid_random:
+            # Never implemented. It used to be a no-op that fell through to the
+            # exhaustive branch, so asking for a cheap random search silently
+            # ran the most expensive path available.
+            raise ValueError(
+                f"parameter_grid {grid_type!r} is not implemented; "
+                f"use {self.parameter_grid_exhaustive!r}"
+            )
+        if grid_type != self.parameter_grid_exhaustive:
+            raise ValueError(
+                f"Unknown parameter_grid {grid_type!r}; "
+                f"expected {self.parameter_grid_exhaustive!r}"
+            )
         models = []
         model_class = self.model_routing(model_type)
-        if grid_type == "random":
-            # TODO implement random grid search
-            pass
-        else:
-            param_grid = ParameterGrid(hyperparameters)
-            for pg in list(param_grid):
-                model = model_class(**pg)
-                mw = ModelWrapper(model_type, model, pg, self.facade.generate_run_id(), self.facade)
-                models.append(mw)
+        for pg in list(ParameterGrid(hyperparameters)):
+            model = model_class(**pg)
+            mw = ModelWrapper(model_type, model, pg, self.facade.generate_run_id(), self.facade)
+            models.append(mw)
         return models
 
     def compare_model(self) -> ModelWrapper:
@@ -195,10 +214,16 @@ class ModelTrainer:
             best_model = self.find_model_by_id(id)
             best_model.set_as_the_best()
             return best_model
-        else:
-            # TODO implement fast model selection
-            pass
-        return self.models[0]
+        if self.objective == self.objective_first_model:
+            # Test-only objective: take the first model off the grid.
+            self.models[0].set_as_the_best()
+            return self.models[0]
+        # "fast_model" was declared but never implemented. This branch used to
+        # fall through and silently return models[0].
+        raise ValueError(
+            f"objective {self.objective!r} is not implemented; supported: "
+            f"{self.objective_best_model!r}, {self.objective_first_model!r}"
+        )
 
     def find_model_by_id(self, id: str) -> Optional[ModelWrapper]:
         for model in self.models:
@@ -206,11 +231,23 @@ class ModelTrainer:
                 return model
         raise ValueError(f"Model with id {id} not found")
 
-    def check_model_against_test(self, best_model: ModelWrapper, input_data: Pairs):
+    def check_model_against_test(self, best_model: ModelWrapper, input_data: Pairs) -> float:
+        """Score the chosen model on test and return its *primary* metric.
+
+        This value becomes the candidate score in `nominate_for_publishing`,
+        which is compared against the incumbent's stored
+        `validation.test.<primary_metric>`. Returning any other metric would
+        compare two different things.
+        """
         if best_model is None:
             raise ValueError("Best model is None")
-        value = best_model.test(input_data, self.metrics)
-        return value
+        scores = best_model.test(input_data, self.metrics)
+        if self.primary_metric not in scores:
+            raise ValueError(
+                f"Primary metric {self.primary_metric!r} was not computed; "
+                f"got {sorted(scores)}"
+            )
+        return scores[self.primary_metric]
 
     def nominate_for_publishing(self, current_score: float, model_id: str):
         intent = self.facade.get_intent()
