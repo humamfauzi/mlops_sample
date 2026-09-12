@@ -6,6 +6,30 @@
 
 ---
 
+## Progress
+
+| Phase | Status | Commits |
+|---|---|---|
+| 0 — Safety net | ✅ done (backup waived; artifacts committed) | `dd2fe65`, `6e6d81e` |
+| 1 — Make the tree honest | ✅ done | `70a8d0e` |
+| 2 — Repair the build path | ✅ done | `a276673`, `8e76120` |
+| 3 — Verify the artifact | ✅ done | `19cc6f4` |
+| 4 — Unify configuration | ⬜ not started — needs decision (one shared config vs .env) | |
+| 5 — Retire the legacy stack | ⬜ not started — MLflow and S3 approved for removal | |
+| 6 — Close the deployment loop | ⬜ not started — target decided: installed binary, no containers | |
+| 7 — Harden the registry | ⬜ not started | |
+
+**Phase 3 gate evidence** (both directions verified):
+
+```
+stale dist/server_module  -> SMOKE TEST FAILED: server process exited during startup
+                             (ValueError: Unknown object store type: sqlite)
+freshly built binary      -> SMOKE TEST PASSED, provenance matches HEAD
+wrong expected SHA        -> SMOKE TEST FAILED: it is stale, rebuild it
+```
+
+---
+
 ## Part A — How it was intended to work
 
 Reconstructed from the pivot commits and the surviving artifacts.
