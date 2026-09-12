@@ -11,25 +11,14 @@ from sklearn.model_selection import train_test_split
 from column.cfs2017 import TabularColumn
 from train.sstruct import Pairs, Stage, FeatureTargetPair
 from train.wrapper import ProcessWrapper
-from repositories.struct import TransformationObject, TransformationInstruction
+from repositories.struct import TransformationObject, TransformationInstruction, TransformationMethods
 from dataclasses import dataclass
 from typing import  List
-from enum import Enum
 
 class TabularDataTransform(ABC):
     @abstractmethod
     def transform_data(self, df: pd.DataFrame) -> Pairs:
         pass
-
-class TransformationMethods(Enum):
-    # would replace the original column with the transformation
-    REPLACE = 1
-    # would append the transformation to the original column; the original
-    # column would still exist
-    APPEND = 2
-
-    # would append the transformation to the original column and remove the original
-    APPEND_AND_REMOVE = 3
 
 @dataclass
 class Keeper:

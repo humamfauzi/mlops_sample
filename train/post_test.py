@@ -1,10 +1,10 @@
 import pandas as pd
 from typing import List
-from enum import Enum
 import numpy as np
 
 from sklearn.metrics import mean_squared_error
 from repositories.repo import Facade
+from repositories.struct import TransformationMethods
 from .data_io import Disk
 from .data_cleaner import Cleaner
 from dataclasses import dataclass
@@ -12,15 +12,6 @@ from sklearn import metrics as mm
 # TODO: should be generalized for all tabular column
 from column.cfs2017 import TabularColumn
 
-class TransformationMethods(Enum):
-    # would replace the original column with the transformation
-    REPLACE = 1
-    # would append the transformation to the original column; the original
-    # column would still exist
-    APPEND = 2
-
-    # would append the transformation to the original column and remove the original
-    APPEND_AND_REMOVE = 3
 @dataclass
 class Config:
     intent: str

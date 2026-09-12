@@ -1,19 +1,9 @@
 from repositories.repo import Facade
+from repositories.struct import TransformationMethods
 import pandas as pd
 import numpy as np
 from enum import Enum
 from server.error import UserError
-
-# TODO: Should be generalized for both train and serve modules
-class TransformationMethods(Enum):
-    # would replace the original column with the transformation
-    REPLACE = 1
-    # would append the transformation to the original column; the original
-    # column would still exist
-    APPEND = 2
-
-    # would append the transformation to the original column and remove the original
-    APPEND_AND_REMOVE = 3
 
 class Transformation:
     def __init__(self, repository: Facade, column_reference: Enum):
