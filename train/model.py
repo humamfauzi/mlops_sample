@@ -1,4 +1,5 @@
 from time import time
+import json
 import numpy as np
 
 from abc import ABC, abstractmethod
@@ -43,11 +44,23 @@ class ModelWrapper:
         # It is the random string not the integer id
         self.run_id = run_id
 
-    def train(self, pairs: Pairs):
+    def train(self, pairs: Pairs, sample_weight: np.ndarray = None):
         start = time.time()
         if not isinstance(pairs, Pairs):
             raise TypeError("Input data must be of type Pairs")
-        self.model.fit(pairs.train.X, np.array(pairs.train.y).reshape(-1,))
+        kwargs = {}
+        if sample_weight is not None:
+            kwargs["sample_weight"] = sample_weight
+        try:
+            self.model.fit(pairs.train.X, np.array(pairs.train.y).reshape(-1,), **kwargs)
+        except TypeError as exc:
+            if sample_weight is not None and "sample_weight" in str(exc):
+                raise TypeError(
+                    f"{self.name} does not accept sample_weight, but one was "
+                    f"configured. Remove the sample_weight setting or use a "
+                    f"model that supports it."
+                ) from exc
+            raise
         end = time.time()
         duration_ms = (end - start) * 1000.0
         self.facade.set_training_time(duration_ms)
@@ -122,6 +135,17 @@ class ModelTrainer:
     parameter_grid_exhaustive = "exhaustive"
     parameter_grid_random = "random"
 
+    # Weighting schemes for the training loss. Dollar error is approximately
+    # value x relative error, so weighting each row by its value points the
+    # model at the shipments the business metric actually cares about. The cap
+    # exists for the same reason it exists in the metric: without it a single
+    # nine-figure shipment owns the objective.
+    WEIGHT_NONE = "none"
+    WEIGHT_VALUE = "value"
+    WEIGHT_LOG_VALUE = "log_value"
+    WEIGHT_SQRT_VALUE = "sqrt_value"
+    _WEIGHT_TYPES = (WEIGHT_NONE, WEIGHT_VALUE, WEIGHT_LOG_VALUE, WEIGHT_SQRT_VALUE)
+
     def __init__(self, 
             facade,
             random_state=42,
@@ -129,7 +153,8 @@ class ModelTrainer:
             fold=5,
             parameter_grid="exhaustive",
             metrics=[],
-            primary_metric=""
+            primary_metric="",
+            sample_weight=None
         ):
         self.facade: Facade = facade
         self.random_state = random_state
@@ -140,8 +165,52 @@ class ModelTrainer:
             raise ValueError("Primary metric must be one of the metrics and not empty")
         self.metrics = metrics
         self.primary_metric = primary_metric
+        self.sample_weight = self._parse_weight_spec(sample_weight)
         self.models = []
         pass
+
+    @classmethod
+    def _parse_weight_spec(cls, spec):
+        """Validate the sample_weight setting from a config.
+
+        Accepts ``None``, a bare type name, or ``{"type": ..., "cap": ...}``.
+        """
+        if spec is None:
+            return {"type": cls.WEIGHT_NONE}
+        if isinstance(spec, str):
+            spec = {"type": spec}
+        if not isinstance(spec, dict):
+            raise ValueError(f"sample_weight must be a string or object, got {type(spec).__name__}")
+        kind = spec.get("type", cls.WEIGHT_NONE)
+        if kind not in cls._WEIGHT_TYPES:
+            raise ValueError(
+                f"sample_weight type {kind!r} is not supported; "
+                f"expected one of {list(cls._WEIGHT_TYPES)}"
+            )
+        cap = spec.get("cap")
+        if cap is not None and float(cap) <= 0:
+            raise ValueError(f"sample_weight cap must be positive, got {cap}")
+        return {"type": kind, "cap": cap}
+
+    def weights_for(self, pair) -> Optional[np.ndarray]:
+        """Training weights for one split, in the target's original units."""
+        kind = self.sample_weight["type"]
+        if kind == self.WEIGHT_NONE:
+            return None
+        raw = pair.y_raw_array().astype(float, copy=False)
+        if np.any(raw < 0):
+            raise ValueError(
+                f"sample_weight type {kind!r} needs a non-negative target; "
+                f"found a minimum of {raw.min()}"
+            )
+        if kind == self.WEIGHT_VALUE:
+            cap = self.sample_weight.get("cap")
+            return np.minimum(raw, float(cap)) if cap is not None else raw
+        if kind == self.WEIGHT_LOG_VALUE:
+            return np.log1p(raw)
+        if kind == self.WEIGHT_SQRT_VALUE:
+            return np.sqrt(raw)
+        raise ValueError(f"unhandled sample_weight type {kind!r}")
 
     @classmethod
     def parse_instruction(cls, properties: dict, call: List[dict], facade):
@@ -154,9 +223,18 @@ class ModelTrainer:
         print("Starting model training process...")
         if not isinstance(input_data, Pairs):
             raise TypeError("Input data must be of type Pairs")
+        weights = self.weights_for(input_data.train)
+        if weights is not None:
+            print(f"  sample_weight={self.sample_weight} "
+                  f"(min {weights.min():,.2f}, median {np.median(weights):,.2f}, "
+                  f"max {weights.max():,.2f})")
         for model in self.models:
             self.facade.new_child_run(model.run_id)
-            model.train(input_data)
+            model.train(input_data, sample_weight=weights)
+            if weights is not None:
+                # Recorded so a run is reproducible without reading the config.
+                self.facade.set_model_properties(
+                    {"sample_weight": json.dumps(self.sample_weight, sort_keys=True)})
             model.validate(input_data, self.metrics)
             model.save()
 

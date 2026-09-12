@@ -52,6 +52,18 @@ class StubModel:
         return np.full(len(X), self.value)
 
 
+class StubWeightRecorder(StubModel):
+    """Records the sample_weight it was fitted with."""
+
+    def __init__(self):
+        super().__init__(0.0)
+        self.seen_weight = "unset"
+
+    def fit(self, X, y, sample_weight=None):
+        self.seen_weight = sample_weight
+        return self
+
+
 def make_pairs(y_true=(0.0, 0.0, 9.0)):
     """A Pairs whose three splits all carry the same small target."""
     y = pd.DataFrame({"target": list(y_true)})
@@ -357,3 +369,107 @@ class TestHistGradientBoosting:
         )
 
         assert len(models) == 4
+
+
+def make_pairs_with_raw(y_raw=(10.0, 100.0, 1_000_000.0, 500_000_000.0)):
+    """A Pairs whose y_raw differs from y, as it does after log transform."""
+    X = pd.DataFrame({"feature": [1.0, 2.0, 3.0, 4.0]})
+    y = pd.DataFrame({"target": np.log(y_raw)})
+    raw = pd.DataFrame({"target": list(y_raw)})
+    return Pairs(
+        train=FeatureTargetPair(X.copy(), y.copy(), Stage.TRAIN, y_raw=raw.copy()),
+        valid=FeatureTargetPair(X.copy(), y.copy(), Stage.VALID, y_raw=raw.copy()),
+        test=FeatureTargetPair(X.copy(), y.copy(), Stage.TEST, y_raw=raw.copy()),
+    )
+
+
+class TestSampleWeighting:
+    """E2: weight each row by its value, so training points at the dollars.
+
+    Dollar error is approximately value x relative error, so the shipments the
+    business metric cares about are the ones with the largest values. Trimming
+    the tail (E5) *down*-weights them and made things worse; this is the same
+    lever pushed the other way.
+    """
+
+    def _trainer(self, spec):
+        return ModelTrainer(RecordingFacade(), metrics=["mae"], primary_metric="mae",
+                            sample_weight=spec)
+
+    def test_defaults_to_no_weighting(self):
+        assert self._trainer(None).weights_for(make_pairs_with_raw().train) is None
+
+    def test_value_weighting_uses_the_raw_target(self):
+        # The weights must come from y_raw, not the log-transformed y.
+        weights = self._trainer("value").weights_for(make_pairs_with_raw().train)
+
+        assert list(weights) == [10.0, 100.0, 1_000_000.0, 500_000_000.0]
+
+    def test_the_cap_flattens_the_extreme_tail(self):
+        pair = make_pairs_with_raw().train
+        weights = self._trainer({"type": "value", "cap": 1_000_000}).weights_for(pair)
+
+        assert list(weights) == [10.0, 100.0, 1_000_000.0, 1_000_000.0]
+
+    def test_log_weighting_compresses_the_tail(self):
+        weights = self._trainer("log_value").weights_for(make_pairs_with_raw().train)
+
+        assert weights[0] < weights[-1]
+        assert weights[-1] / weights[0] < 10      # raw ratio is 5e7
+
+    def test_sqrt_weighting_sits_between(self):
+        pair = make_pairs_with_raw().train
+        raw = self._trainer("value").weights_for(pair)
+        log = self._trainer("log_value").weights_for(pair)
+        sq = self._trainer("sqrt_value").weights_for(pair)
+
+        assert (log < sq).all() and (sq < raw).all()
+
+    def test_unknown_type_is_rejected(self):
+        with pytest.raises(ValueError, match="not supported"):
+            self._trainer("nonsense")
+
+    def test_negative_cap_is_rejected(self):
+        with pytest.raises(ValueError, match="cap must be positive"):
+            self._trainer({"type": "value", "cap": -1})
+
+    def test_bare_string_and_object_forms_agree(self):
+        pair = make_pairs_with_raw().train
+
+        assert (self._trainer("value").weights_for(pair) ==
+                self._trainer({"type": "value"}).weights_for(pair)).all()
+
+    def test_the_estimator_receives_the_weights(self):
+        facade = RecordingFacade()
+        trainer = self._trainer("value")
+        model = StubWeightRecorder()
+        wrapper = ModelWrapper("stub", model, {}, "RUN001", facade)
+        pairs = make_pairs_with_raw()
+
+        wrapper.train(pairs, sample_weight=trainer.weights_for(pairs.train))
+
+        assert list(model.seen_weight) == [10.0, 100.0, 1_000_000.0, 500_000_000.0]
+
+    def test_the_estimator_receives_nothing_when_unconfigured(self):
+        facade = RecordingFacade()
+        trainer = self._trainer(None)
+        model = StubWeightRecorder()
+        wrapper = ModelWrapper("stub", model, {}, "RUN001", facade)
+        pairs = make_pairs_with_raw()
+
+        wrapper.train(pairs, sample_weight=trainer.weights_for(pairs.train))
+
+        assert model.seen_weight is None
+
+    def test_a_model_without_sample_weight_support_says_so(self):
+        from sklearn.neighbors import KNeighborsRegressor
+
+        facade = RecordingFacade()
+        wrapper = ModelWrapper(
+            "k_nearest_neighbors_regressor",
+            KNeighborsRegressor(n_neighbors=1),
+            {}, "RUN001", facade,
+        )
+
+        with pytest.raises(TypeError, match="does not accept sample_weight"):
+            wrapper.train(make_pairs_with_raw(), sample_weight=np.ones(4))

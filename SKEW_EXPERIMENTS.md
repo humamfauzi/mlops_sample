@@ -111,8 +111,14 @@ Measured on run 73 across five 100k samples:
 | weighted by log1p(value) | 0.8134 | **0.5%** | partial |
 | weighted by √value | 0.9364 | 3.1% | partial |
 
-**Recommendation: add `value_weighted_log_mae` as the primary dollar-aligned
-metric.** Now implemented in `train/post_test.py` and exposed through
+**Recommendation: add `value_weighted_log_mae` as a dollar-aligned
+metric.**
+
+> ⚠️ **Amended after §8.** VWLE is stable and dollar-aligned, but it is
+> **gameable** and must not be the sole selection metric. Value-weighted
+> training drove it to 0.8007 while predicting $2,821 for an $18 shipment.
+> Use it as a *gate* alongside unweighted log MAE, not as a replacement.
+ Now implemented in `train/post_test.py` and exposed through
 `post_test`'s `metric_map`, so a config can request it directly:
 
 ```json
@@ -428,3 +434,94 @@ these correctly. **D1 should become "select on VWLE, report log MAE".**
 - **E3 (unit-value reparametrisation)** — unchanged, still worth testing.
 - **E6/C1 (capacity, features)** — unchanged. Note all five runs here are still
   underfit in log space; capacity is untested at this scale with HGB.
+
+---
+
+## 8. Results — E2, and a correction to §2
+
+E2 implemented: `sample_weight` is now a `model_trainer` setting, and
+`FeatureTargetPair` carries `y_raw` so the weight is computed from the target in
+its **original units** (the log transform has already replaced `y` by then).
+
+```json
+"sample_weight": {"type": "value", "cap": 1000000}
+```
+
+Three schemes, same features, same trainer, no trimming, all scored on the full
+population (100k rows, seed 42):
+
+| run | weighting | log test MAE | dollar MAE | **VWLE** | decile-0 ratio | decile-9 ratio |
+|---|---|---|---|---|---|---|
+| 92 | none | 0.8520 | $10,095 | 1.2969 | 6.3× over | 0.40 |
+| 102 | `value` (uncapped) | **2.1480** | $20,223 | 0.8396 | — | — |
+| 104 | `value` cap $1M | **1.9420** | $15,833 | **0.8007** | **158× over** | **0.94** |
+| 106 | `log_value` | 0.8830 | $9,653 | 1.1836 | 9.6× over | 0.47 |
+
+### 8.1 Weighting by value abandons the bulk
+
+Run 104 nails the tail — decile 9 goes from 2.5× under-predicted to **0.94**,
+essentially calibrated. And it does so by predicting **$2,821 for a shipment
+worth $18**.
+
+With weights proportional to value, the shipments worth $18 carry weight 18 and
+the ones worth $100M carry weight 10⁶. The model optimises for the latter and
+stops distinguishing the former. Log-space MAE — which weights every row equally
+— collapses from 0.8520 to **2.1480**.
+
+This is §1.2's shrinkage running in reverse: instead of hedging toward the
+middle, the model now hedges toward the top.
+
+### 8.2 §2's recommendation was wrong — VWLE is gameable
+
+**VWLE *improved* to 0.8007 for that model** — a 38% gain — because its weights
+are `min(y, $1M)`, so an $18 row contributes essentially nothing. VWLE is blind
+to exactly the damage value weighting causes.
+
+That falsifies §2's recommendation to select on VWLE. The metric is *necessary*
+— it is stable and it does track dollars across the mid-range — but it is **not
+sufficient**: any objective can buy VWLE by sacrificing the rows VWLE barely
+weights.
+
+**Revised position:** report VWLE *and* unweighted log MAE, and require both.
+A candidate that improves VWLE while log MAE degrades sharply (0.85 → 1.94 here)
+has not improved the model, it has moved the error somewhere the metric does not
+look. The D1 change in `EXPERIMENT_PLAN.md` should be a **Pareto gate, not a
+replacement**.
+
+A cleaner metric may exist — capping the *error* rather than the *weight* is the
+textbook robust estimator and would be immune to this. It is untested.
+
+### 8.3 `log_value` weighting is a modest, real win
+
+| | baseline (92) | `log_value` (106) | change |
+|---|---|---|---|
+| VWLE (median of 5 seeds) | 1.2969 | **1.1836** | **−8.7%** |
+| VWLE spread | 4% | 4% | — |
+| dollar MAE (median of 5) | $10,911 | $10,732 | −1.6% (inside 27% noise) |
+| decile-9 calibration | 0.40 | 0.47 | better |
+| log test MAE | 0.8520 | 0.8830 | worse |
+
+A gentle tilt toward large shipments — `log1p(value)`, a ratio of ~28:1 between
+the largest and smallest weights rather than 10⁷:1 — improves the tail
+calibration and the value-weighted metric without collapsing the bulk. The
+dollar MAE change is not distinguishable from noise.
+
+It is a small win, not the breakthrough §3 predicted. Report it as such.
+
+### 8.4 The general lesson
+
+Every intervention tried so far trades the bulk against the tail, and the trade
+is roughly zero-sum:
+
+| intervention | tail (decile 9) | bulk | net |
+|---|---|---|---|
+| trim the tail (E5) | worse (0.40 → 0.18) | slightly better | **worse** |
+| value weighting (E2) | much better (0.40 → 0.94) | catastrophic | **worse in dollars** |
+| `log_value` weighting | better (0.40 → 0.47) | slightly worse | **small win** |
+
+The model has a fixed budget of fit, and moving it between the bulk and the tail
+does not create accuracy. What creates accuracy is better *features* or more
+*capacity* — which is E6/C1, still untested, and now the more promising branch.
+
+The one intervention that would break the trade-off is fixing the §1.3
+measurement problem, not the model.

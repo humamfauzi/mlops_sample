@@ -207,10 +207,11 @@ class Transformer:
                 random_state=42,
         )
 
-        # Collect it as a pair for easier grouping
-        train_pair = FeatureTargetPair(Xtr, ytr, Stage.TRAIN)
-        valid_pair = FeatureTargetPair(Xv, yv, Stage.VALID)
-        test_pair = FeatureTargetPair(Xte, yte, Stage.TEST)
+        # Collect it as a pair for easier grouping. y_raw carries the target in
+        # its original units, before the transformations below replace `y`.
+        train_pair = FeatureTargetPair(Xtr, ytr, Stage.TRAIN, y_raw=ytr.copy())
+        valid_pair = FeatureTargetPair(Xv, yv, Stage.VALID, y_raw=yv.copy())
+        test_pair = FeatureTargetPair(Xte, yte, Stage.TEST, y_raw=yte.copy())
         self._save_pairing_metadata(train_pair, valid_pair, test_pair)
         return train_pair, valid_pair, test_pair
 

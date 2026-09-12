@@ -32,11 +32,19 @@ class FeatureTargetPair:
         self, 
         X: pd.DataFrame, 
         y: pd.DataFrame, 
-        stage: Stage
+        stage: Stage,
+        y_raw: pd.DataFrame = None,
     ) -> None:
         self.X = X
         self.y = y
         self.stage = stage
+        # The target *before* any transformation. Transformations replace `y`
+        # (log, standardise), so anything that needs the target in its original
+        # units -- sample weights, calibration checks -- has to read this.
+        # Defaults to `y` for callers that build a pair from already-final data.
+        if y_raw is None:
+            y_raw = y.copy() if hasattr(y, "copy") else y
+        self.y_raw = y_raw
 
     def str_columns(self):
         self.X.columns = [col.name if isinstance(col, Enum) else col for col in self.X.columns]
@@ -57,6 +65,10 @@ class FeatureTargetPair:
         therefore we need to offer an options to lower single dimension
         """
         return np.array(self.y).reshape(-1)
+
+    def y_raw_array(self) -> np.ndarray:
+        """The target in its original units, before any transformation."""
+        return np.array(self.y_raw).reshape(-1)
 
 class Pairs:
     def __init__(self, train, valid, test):
